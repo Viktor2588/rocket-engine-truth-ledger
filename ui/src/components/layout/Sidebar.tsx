@@ -6,6 +6,7 @@ import {
   ClipboardList,
   GitBranch,
   Database,
+  Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -16,6 +17,7 @@ const navItems = [
   { to: '/review', icon: ClipboardList, label: 'Review Queue' },
   { to: '/pipeline', icon: GitBranch, label: 'Pipeline' },
   { to: '/sources', icon: Database, label: 'Sources' },
+  { to: '/configuration', icon: Settings, label: 'Configuration' },
 ];
 
 export function Sidebar() {

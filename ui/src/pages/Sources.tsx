@@ -198,6 +198,10 @@ function SourceCard({ source, onEdit, onDelete }: {
         setFeedUrl('');
         setShowAddFeed(false);
       },
+      onError: (error: any) => {
+        const message = error.response?.data?.error || error.message || 'Failed to add feed';
+        alert(message);
+      },
     });
   };
 
@@ -210,6 +214,10 @@ function SourceCard({ source, onEdit, onDelete }: {
       onSuccess: () => {
         setNewUrl('');
         setShowAddUrl(false);
+      },
+      onError: (error: any) => {
+        const message = error.response?.data?.error || error.message || 'Failed to add URL';
+        alert(message);
       },
     });
   };

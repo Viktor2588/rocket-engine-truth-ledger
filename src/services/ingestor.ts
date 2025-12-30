@@ -648,16 +648,24 @@ export class SourceManager {
   }
 
   /**
-   * Get all sources with optional filters
+   * Get all sources with optional filters (includes feeds and URLs)
    */
   static async getSources(filters?: { isActive?: boolean; type?: string }): Promise<Source[]> {
     const sql = getConnection();
-    return await sql<Source[]>`
+    const sources = await sql<Source[]>`
       SELECT * FROM truth_ledger_claude.sources
       WHERE (${filters?.isActive ?? null}::boolean IS NULL OR is_active = ${filters?.isActive ?? null})
         AND (${filters?.type ?? null}::text IS NULL OR source_type = ${filters?.type ?? null})
       ORDER BY name
     `;
+
+    // Fetch feeds and URLs for each source
+    for (const source of sources) {
+      source.feeds = await this.getFeeds(source.id);
+      source.urls = await this.getUrls(source.id);
+    }
+
+    return sources;
   }
 
   /**

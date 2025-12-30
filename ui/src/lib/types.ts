@@ -267,3 +267,173 @@ export interface ReviewQueueFilters {
   limit?: number;
   offset?: number;
 }
+
+// Pipeline visualization types
+export interface SourcePipelineStats {
+  sources: SourceWithPipelineStats[];
+  totals: {
+    documents: number;
+    snippets: number;
+    claims: number;
+    evidence: number;
+  };
+}
+
+export interface SourceWithPipelineStats {
+  id: string;
+  name: string;
+  sourceType: SourceType;
+  baseTrust: number;
+  isActive: boolean;
+  stats: {
+    documents: number;
+    snippets: number;
+    claims: number;
+    evidence: number;
+  };
+  recentActivity: {
+    lastDocumentAt: string | null;
+    lastClaimAt: string | null;
+  };
+}
+
+export interface StageDetails {
+  stage: string;
+  totalCount: number;
+  bySource: {
+    sourceId: string;
+    sourceName: string;
+    count: number;
+    percentage: number;
+  }[];
+  samples: unknown[];
+  processingStats: {
+    last24h: number;
+    last7d: number;
+  };
+  summary?: {
+    avgTruth: number;
+    highConfidence: number;
+    lowConfidence: number;
+  };
+}
+
+export interface SourceDocuments {
+  documents: {
+    id: string;
+    title: string;
+    url: string;
+    docType: string;
+    publishedAt: string | null;
+    retrievedAt: string;
+    snippetCount: number;
+  }[];
+  total: number;
+}
+
+export interface DocumentSnippets {
+  snippets: {
+    id: string;
+    locator: string;
+    text: string;
+    snippetType: string;
+    createdAt: string;
+  }[];
+  total: number;
+}
+
+export interface SnippetClaims {
+  claims: {
+    id: string;
+    valueJson: unknown;
+    unit: string | null;
+    scopeJson: unknown;
+    entityName: string | null;
+    attributeName: string | null;
+    stance: string;
+    confidence: number;
+    quote: string;
+  }[];
+  total: number;
+}
+
+export interface ClaimEvidence {
+  evidence: {
+    id: string;
+    quote: string;
+    stance: string;
+    confidence: number;
+    locator: string;
+    snippetText: string;
+    documentTitle: string;
+    documentUrl: string;
+    sourceName: string;
+  }[];
+  total: number;
+}
+
+// Extractor pattern types
+export interface ExtractorPattern {
+  id: string;
+  name: string;
+  description: string | null;
+  attributePattern: string;
+  entityType: string | null;  // Uses ENTITY_TYPES from entity-types.ts
+  patterns: string[];
+  targetUnit: string | null;
+  unitConversions: Record<string, number>;
+  isActive: boolean;
+  priority: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateExtractorPatternInput {
+  name: string;
+  description?: string;
+  attributePattern: string;
+  entityType?: string;  // Uses ENTITY_TYPES from entity-types.ts
+  patterns: string[];
+  targetUnit?: string;
+  unitConversions?: Record<string, number>;
+  isActive?: boolean;
+  priority?: number;
+}
+
+export interface UpdateExtractorPatternInput {
+  name?: string;
+  description?: string;
+  attributePattern?: string;
+  entityType?: string | null;  // Uses ENTITY_TYPES from entity-types.ts
+  patterns?: string[];
+  targetUnit?: string;
+  unitConversions?: Record<string, number>;
+  isActive?: boolean;
+  priority?: number;
+}
+
+export interface PatternTestResult {
+  matches: {
+    pattern: string;
+    match: string;
+    value: number;
+    unit: string | null;
+    convertedValue: number | null;
+  }[];
+  targetUnit: string | null;
+  matchCount: number;
+}
+
+// Entity management types (extended for CRUD)
+export interface CreateEntityInput {
+  canonicalName: string;
+  entityType: string;  // Uses ENTITY_TYPES from entity-types.ts
+  aliases?: string[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpdateEntityInput {
+  canonicalName?: string;
+  aliases?: string[];
+  metadata?: Record<string, unknown>;
+}

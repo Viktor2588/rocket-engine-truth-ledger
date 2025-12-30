@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { statsApi, entityApi, conflictApi, reviewApi, pipelineApi, sourcesApi } from '@/lib/api';
+import { statsApi, entityApi, conflictApi, reviewApi, pipelineApi, sourcesApi, extractorPatternApi } from '@/lib/api';
 import { useTruthSlider } from '@/context/TruthSliderContext';
 import type {
   EntityFilters,
@@ -11,6 +11,10 @@ import type {
   CreateFeedInput,
   UpdateFeedInput,
   CreateUrlInput,
+  CreateEntityInput,
+  UpdateEntityInput,
+  CreateExtractorPatternInput,
+  UpdateExtractorPatternInput,
 } from '@/lib/types';
 
 // Query keys
@@ -220,6 +224,54 @@ export function useCancelJob() {
   });
 }
 
+// Pipeline visualization hooks
+export function useSourcePipelineStats() {
+  return useQuery({
+    queryKey: ['sources', 'pipeline-stats'] as const,
+    queryFn: pipelineApi.getSourcePipelineStats,
+  });
+}
+
+export function useStageDetails(stage: string, limit?: number) {
+  return useQuery({
+    queryKey: ['pipeline', 'stage', stage, 'details', limit] as const,
+    queryFn: () => pipelineApi.getStageDetails(stage, limit),
+    enabled: !!stage,
+  });
+}
+
+export function useSourceDocuments(sourceId: string, limit?: number) {
+  return useQuery({
+    queryKey: ['sources', sourceId, 'documents', limit] as const,
+    queryFn: () => pipelineApi.getSourceDocuments(sourceId, limit),
+    enabled: !!sourceId,
+  });
+}
+
+export function useDocumentSnippets(documentId: string, limit?: number) {
+  return useQuery({
+    queryKey: ['documents', documentId, 'snippets', limit] as const,
+    queryFn: () => pipelineApi.getDocumentSnippets(documentId, limit),
+    enabled: !!documentId,
+  });
+}
+
+export function useSnippetClaims(snippetId: string) {
+  return useQuery({
+    queryKey: ['snippets', snippetId, 'claims'] as const,
+    queryFn: () => pipelineApi.getSnippetClaims(snippetId),
+    enabled: !!snippetId,
+  });
+}
+
+export function useClaimEvidence(claimId: string) {
+  return useQuery({
+    queryKey: ['claims', claimId, 'evidence'] as const,
+    queryFn: () => pipelineApi.getClaimEvidence(claimId),
+    enabled: !!claimId,
+  });
+}
+
 // Sources hooks
 export function useSourcesConfig() {
   return useQuery({
@@ -384,5 +436,101 @@ export function useDeleteUrl() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sources'] });
     },
+  });
+}
+
+// Entity CRUD hooks
+export function useCreateEntity() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: CreateEntityInput) => entityApi.create(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['entities'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+    },
+  });
+}
+
+export function useUpdateEntity() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateEntityInput }) =>
+      entityApi.update(id, input),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['entities'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.entity(variables.id) });
+    },
+  });
+}
+
+export function useDeleteEntity() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => entityApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['entities'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+    },
+  });
+}
+
+// Extractor Pattern hooks
+export function useExtractorPatterns(params?: { active?: boolean; entityType?: string }) {
+  return useQuery({
+    queryKey: ['extractor-patterns', params] as const,
+    queryFn: () => extractorPatternApi.list(params),
+  });
+}
+
+export function useExtractorPattern(id: string) {
+  return useQuery({
+    queryKey: ['extractor-patterns', id] as const,
+    queryFn: () => extractorPatternApi.get(id),
+    enabled: !!id,
+  });
+}
+
+export function useCreateExtractorPattern() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: CreateExtractorPatternInput) => extractorPatternApi.create(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['extractor-patterns'] });
+    },
+  });
+}
+
+export function useUpdateExtractorPattern() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateExtractorPatternInput }) =>
+      extractorPatternApi.update(id, input),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['extractor-patterns'] });
+      queryClient.invalidateQueries({ queryKey: ['extractor-patterns', variables.id] });
+    },
+  });
+}
+
+export function useDeleteExtractorPattern() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => extractorPatternApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['extractor-patterns'] });
+    },
+  });
+}
+
+export function useTestExtractorPattern() {
+  return useMutation({
+    mutationFn: ({ id, text }: { id: string; text: string }) =>
+      extractorPatternApi.test(id, text),
   });
 }

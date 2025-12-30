@@ -22,6 +22,12 @@ import {
   Loader2,
   Square,
   RotateCcw,
+  BarChart3,
+  TreePine,
+  Settings,
+  Link2,
+  Download,
+  Info,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -40,6 +46,9 @@ import {
   useCancelJob,
 } from '@/hooks/useApi';
 import type { PipelineJob, FeedStatus } from '@/lib/api';
+import { SourceContributionTable } from '@/components/pipeline/SourceContributionTable';
+import { PipelineSankeyDiagram } from '@/components/pipeline/PipelineSankeyDiagram';
+import { PipelineTreeView } from '@/components/pipeline/PipelineTreeView';
 
 // Format relative time
 function formatRelativeTime(dateString: string | null): string {
@@ -841,8 +850,8 @@ function SyncHistoryTable() {
           onChange={(e) => setFilter({ ...filter, sync_type: e.target.value || undefined })}
         >
           <option value="">All stages</option>
+          <option value="url_ingest">URL Ingest</option>
           <option value="feed_ingest">Feed Ingest</option>
-          <option value="truth_ingest">Document Ingest</option>
           <option value="truth_extract">Extract</option>
           <option value="conflict_detection">Conflicts</option>
           <option value="truth_derive">Derive</option>
@@ -929,8 +938,8 @@ export function Pipeline() {
   const runningCount = jobsData?.jobs?.filter(j => j.isRunning).length || 0;
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
+    <div className="space-y-6">
+      {/* Header with Health Status */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Pipeline</h1>
@@ -959,40 +968,45 @@ export function Pipeline() {
         </div>
       </div>
 
-      {/* Pipeline Flow Diagram */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Pipeline Stages</CardTitle>
-          <CardDescription>
-            Data flows through these stages from source ingestion to truth scoring
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <PipelineFlow />
-        </CardContent>
-      </Card>
-
-      {/* Stats */}
-      <PipelineStatsCards />
-
-      {/* Tabs for different views */}
-      <Tabs defaultValue="jobs">
-        <TabsList>
+      {/* Main Navigation Tabs - Prominent at top */}
+      <Tabs defaultValue="jobs" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:inline-flex">
           <TabsTrigger value="jobs" className="gap-2">
             <Play className="h-4 w-4" />
-            Run Jobs
+            <span className="hidden sm:inline">Run</span> Jobs
           </TabsTrigger>
-          <TabsTrigger value="dataflow">Data Flow</TabsTrigger>
-          <TabsTrigger value="feeds">Feed Status</TabsTrigger>
-          <TabsTrigger value="history">Sync History</TabsTrigger>
+          <TabsTrigger value="overview" className="gap-2">
+            <Activity className="h-4 w-4" />
+            Overview
+          </TabsTrigger>
+          <TabsTrigger value="dataflow" className="gap-2">
+            <BarChart3 className="h-4 w-4" />
+            Data Flow
+          </TabsTrigger>
+          <TabsTrigger value="sources" className="gap-2">
+            <Database className="h-4 w-4" />
+            Sources
+          </TabsTrigger>
+          <TabsTrigger value="explorer" className="gap-2">
+            <TreePine className="h-4 w-4" />
+            Explorer
+          </TabsTrigger>
+          <TabsTrigger value="feeds" className="gap-2">
+            <Rss className="h-4 w-4" />
+            Feeds
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="jobs" className="mt-4">
+        {/* Jobs Tab */}
+        <TabsContent value="jobs" className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Available Jobs</CardTitle>
               <CardDescription>
-                Click to run individual stages or the full pipeline
+                <span className="block">Run individual stages or the full pipeline.</span>
+                <span className="text-xs mt-1 block">
+                  <strong>Typical workflow:</strong> URL Ingest → Extract → Conflicts → Derive → Score, or use Full Pipeline after ingestion.
+                </span>
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -1001,35 +1015,71 @@ export function Pipeline() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="dataflow" className="mt-4">
+        {/* Overview Tab - Pipeline stages, stats, history */}
+        <TabsContent value="overview" className="space-y-6">
+          {/* Configuration Dependency Info */}
+          <Card className="border-blue-500/30 bg-blue-500/5">
+            <CardContent className="py-4">
+              <div className="flex items-start gap-3">
+                <Info className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+                <div className="space-y-3 flex-1">
+                  <p className="font-medium text-blue-700 dark:text-blue-300">
+                    Pipeline Data Flow
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <a href="/sources" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 transition-colors">
+                      <Database className="h-4 w-4 text-blue-500" />
+                      <span className="font-medium">Sources</span>
+                    </a>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                    <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/10">
+                      <Download className="h-4 w-4 text-green-500" />
+                      <span className="font-medium">Ingest</span>
+                      <span className="text-xs text-muted-foreground">(URLs + Feeds)</span>
+                    </span>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                    <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500/10">
+                      <Brain className="h-4 w-4 text-purple-500" />
+                      <span className="font-medium">Extract</span>
+                    </span>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                    <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-500/10">
+                      <Scale className="h-4 w-4 text-yellow-500" />
+                      <span className="font-medium">Score</span>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-muted-foreground pt-1">
+                    <a href="/sources" className="flex items-center gap-1 hover:text-foreground transition-colors">
+                      <Link2 className="h-3 w-3" />
+                      Manage sources, URLs & feeds
+                    </a>
+                    <a href="/configuration" className="flex items-center gap-1 hover:text-foreground transition-colors">
+                      <Settings className="h-3 w-3" />
+                      Configure entities & extractors
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Pipeline Flow Diagram */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Data Flow</CardTitle>
+              <CardTitle className="text-lg">Processing Stages</CardTitle>
               <CardDescription>
-                Current state of data at each stage in the pipeline
+                After ingestion, data flows through these processing stages
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <DataFlowVisualization />
+              <PipelineFlow />
             </CardContent>
           </Card>
-        </TabsContent>
 
-        <TabsContent value="feeds" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Feed Status</CardTitle>
-              <CardDescription>
-                Status of RSS/Atom feeds with last fetch times and errors
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <FeedStatusPanel />
-            </CardContent>
-          </Card>
-        </TabsContent>
+          {/* Stats */}
+          <PipelineStatsCards />
 
-        <TabsContent value="history" className="mt-4">
+          {/* Sync History */}
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Sync History</CardTitle>
@@ -1039,6 +1089,47 @@ export function Pipeline() {
             </CardHeader>
             <CardContent>
               <SyncHistoryTable />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Data Flow Tab */}
+        <TabsContent value="dataflow" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Pipeline Data Flow</CardTitle>
+              <CardDescription>
+                Visual representation of how data flows through the pipeline stages
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DataFlowVisualization />
+            </CardContent>
+          </Card>
+          <PipelineSankeyDiagram />
+        </TabsContent>
+
+        {/* Sources Tab */}
+        <TabsContent value="sources" className="space-y-6">
+          <SourceContributionTable />
+        </TabsContent>
+
+        {/* Explorer Tab */}
+        <TabsContent value="explorer">
+          <PipelineTreeView />
+        </TabsContent>
+
+        {/* Feeds Tab */}
+        <TabsContent value="feeds">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Feed Status</CardTitle>
+              <CardDescription>
+                Status of RSS/Atom feeds with last fetch times and errors
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <FeedStatusPanel />
             </CardContent>
           </Card>
         </TabsContent>

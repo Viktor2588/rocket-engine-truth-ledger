@@ -24,7 +24,7 @@
     "job:conflicts": "tsx src/index.ts job conflicts",
     "job:integrity": "tsx src/index.ts job integrity",
     "job:health": "tsx src/index.ts job health",
-    "ingest:web": "tsx src/scripts/ingest-web-sources.ts",
+    "ingest:all": "tsx src/scripts/ingest-all-sources.ts",
     "ingest:feeds": "tsx src/scripts/ingest-feeds.ts",
     "ingest:feeds:schedule": "tsx src/scripts/ingest-feeds.ts --schedule",
     "test": "vitest",

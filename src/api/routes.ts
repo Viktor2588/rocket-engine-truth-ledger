@@ -10,7 +10,7 @@ import { ConflictDetector } from '../services/conflict-detector.js';
 import { Extractor } from '../services/extractor.js';
 import { Deriver } from '../services/deriver.js';
 import { FeedFetcher } from '../services/feed-fetcher.js';
-import { SourceManager } from '../services/ingestor.js';
+import { SourceManager, Ingestor } from '../services/ingestor.js';
 import { getConnection } from '../db/connection.js';
 import {
   SOURCE_REGISTRY,
@@ -182,6 +182,433 @@ router.get('/entities/:entityId', asyncHandler(async (req, res) => {
   res.json(entities[0]);
 }));
 
+/**
+ * POST /entities
+ * Create a new entity
+ */
+router.post('/entities', asyncHandler(async (req, res) => {
+  const sql = getConnection();
+  const { canonicalName, entityType, aliases = [], metadata = {} } = req.body;
+
+  if (!canonicalName || !entityType) {
+    res.status(400).json({ error: 'canonicalName and entityType are required' });
+    return;
+  }
+
+  // Valid entity types matching database CHECK constraint
+  const validEntityTypes = [
+    'engine', 'launch_vehicle', 'country', 'satellite', 'launch_site',
+    'space_mission', 'standard_clause', 'organization', 'other'
+  ];
+  if (!validEntityTypes.includes(entityType)) {
+    res.status(400).json({
+      error: `entityType must be one of: ${validEntityTypes.join(', ')}`
+    });
+    return;
+  }
+
+  const result = await sql<Entity[]>`
+    INSERT INTO truth_ledger_claude.entities (canonical_name, entity_type, aliases, metadata)
+    VALUES (${canonicalName}, ${entityType}, ${aliases}, ${JSON.stringify(metadata)})
+    RETURNING ${sql.unsafe(entityColumns)}
+  `;
+
+  res.status(201).json(result[0]);
+}));
+
+/**
+ * PUT /entities/:entityId
+ * Update an entity
+ */
+router.put('/entities/:entityId', asyncHandler(async (req, res) => {
+  const sql = getConnection();
+  const { entityId } = req.params;
+  const { canonicalName, aliases, metadata } = req.body;
+
+  // Check entity exists
+  const existing = await sql`SELECT id FROM truth_ledger_claude.entities WHERE id = ${entityId}`;
+  if (existing.length === 0) {
+    res.status(404).json({ error: 'Entity not found' });
+    return;
+  }
+
+  const result = await sql<Entity[]>`
+    UPDATE truth_ledger_claude.entities
+    SET
+      canonical_name = COALESCE(${canonicalName}, canonical_name),
+      aliases = COALESCE(${aliases}, aliases),
+      metadata = COALESCE(${metadata ? JSON.stringify(metadata) : null}, metadata),
+      updated_at = NOW()
+    WHERE id = ${entityId}
+    RETURNING ${sql.unsafe(entityColumns)}
+  `;
+
+  res.json(result[0]);
+}));
+
+/**
+ * DELETE /entities/:entityId
+ * Delete an entity
+ */
+router.delete('/entities/:entityId', asyncHandler(async (req, res) => {
+  const sql = getConnection();
+  const { entityId } = req.params;
+
+  // Check entity exists
+  const existing = await sql`SELECT id FROM truth_ledger_claude.entities WHERE id = ${entityId}`;
+  if (existing.length === 0) {
+    res.status(404).json({ error: 'Entity not found' });
+    return;
+  }
+
+  // Check if entity has associated claims
+  const claims = await sql`SELECT COUNT(*) as count FROM truth_ledger_claude.claims WHERE entity_id = ${entityId}`;
+  if (parseInt(claims[0].count) > 0) {
+    res.status(400).json({
+      error: 'Cannot delete entity with existing claims. Delete associated claims first.',
+      claimCount: parseInt(claims[0].count)
+    });
+    return;
+  }
+
+  await sql`DELETE FROM truth_ledger_claude.entities WHERE id = ${entityId}`;
+
+  res.json({ success: true, message: 'Entity deleted' });
+}));
+
+// ============================================================================
+// EXTRACTOR PATTERNS ENDPOINTS
+// ============================================================================
+
+/**
+ * GET /extractor-patterns
+ * List all extractor patterns
+ */
+router.get('/extractor-patterns', asyncHandler(async (req, res) => {
+  const sql = getConnection();
+  const { active, entity_type } = req.query;
+
+  let patterns;
+
+  if (active === 'true') {
+    patterns = await sql`
+      SELECT
+        id,
+        name,
+        description,
+        attribute_pattern as "attributePattern",
+        entity_type as "entityType",
+        patterns,
+        target_unit as "targetUnit",
+        unit_conversions as "unitConversions",
+        is_active as "isActive",
+        priority,
+        created_at as "createdAt",
+        updated_at as "updatedAt"
+      FROM truth_ledger_claude.extractor_patterns
+      WHERE is_active = true
+      ORDER BY priority DESC, name
+    `;
+  } else if (entity_type) {
+    patterns = await sql`
+      SELECT
+        id,
+        name,
+        description,
+        attribute_pattern as "attributePattern",
+        entity_type as "entityType",
+        patterns,
+        target_unit as "targetUnit",
+        unit_conversions as "unitConversions",
+        is_active as "isActive",
+        priority,
+        created_at as "createdAt",
+        updated_at as "updatedAt"
+      FROM truth_ledger_claude.extractor_patterns
+      WHERE entity_type = ${entity_type as string} OR entity_type IS NULL
+      ORDER BY priority DESC, name
+    `;
+  } else {
+    patterns = await sql`
+      SELECT
+        id,
+        name,
+        description,
+        attribute_pattern as "attributePattern",
+        entity_type as "entityType",
+        patterns,
+        target_unit as "targetUnit",
+        unit_conversions as "unitConversions",
+        is_active as "isActive",
+        priority,
+        created_at as "createdAt",
+        updated_at as "updatedAt"
+      FROM truth_ledger_claude.extractor_patterns
+      ORDER BY priority DESC, name
+    `;
+  }
+
+  res.json({ patterns, count: patterns.length });
+}));
+
+/**
+ * GET /extractor-patterns/:id
+ * Get extractor pattern by ID
+ */
+router.get('/extractor-patterns/:id', asyncHandler(async (req, res) => {
+  const sql = getConnection();
+  const { id } = req.params;
+
+  const patterns = await sql`
+    SELECT
+      id,
+      name,
+      description,
+      attribute_pattern as "attributePattern",
+      entity_type as "entityType",
+      patterns,
+      target_unit as "targetUnit",
+      unit_conversions as "unitConversions",
+      is_active as "isActive",
+      priority,
+      created_at as "createdAt",
+      updated_at as "updatedAt"
+    FROM truth_ledger_claude.extractor_patterns
+    WHERE id = ${id}
+  `;
+
+  if (patterns.length === 0) {
+    res.status(404).json({ error: 'Extractor pattern not found' });
+    return;
+  }
+
+  res.json(patterns[0]);
+}));
+
+/**
+ * POST /extractor-patterns
+ * Create a new extractor pattern
+ */
+router.post('/extractor-patterns', asyncHandler(async (req, res) => {
+  const sql = getConnection();
+  const {
+    name,
+    description,
+    attributePattern,
+    entityType,
+    patterns,
+    targetUnit,
+    unitConversions = {},
+    isActive = true,
+    priority = 100
+  } = req.body;
+
+  if (!name || !attributePattern || !patterns || !Array.isArray(patterns)) {
+    res.status(400).json({ error: 'name, attributePattern, and patterns (array) are required' });
+    return;
+  }
+
+  // Validate regex patterns
+  try {
+    for (const pattern of patterns) {
+      new RegExp(pattern, 'i');
+    }
+  } catch (e: any) {
+    res.status(400).json({ error: `Invalid regex pattern: ${e.message}` });
+    return;
+  }
+
+  const result = await sql`
+    INSERT INTO truth_ledger_claude.extractor_patterns
+    (name, description, attribute_pattern, entity_type, patterns, target_unit, unit_conversions, is_active, priority)
+    VALUES (
+      ${name},
+      ${description || null},
+      ${attributePattern},
+      ${entityType || null},
+      ${JSON.stringify(patterns)},
+      ${targetUnit || null},
+      ${JSON.stringify(unitConversions)},
+      ${isActive},
+      ${priority}
+    )
+    RETURNING
+      id,
+      name,
+      description,
+      attribute_pattern as "attributePattern",
+      entity_type as "entityType",
+      patterns,
+      target_unit as "targetUnit",
+      unit_conversions as "unitConversions",
+      is_active as "isActive",
+      priority,
+      created_at as "createdAt",
+      updated_at as "updatedAt"
+  `;
+
+  res.status(201).json(result[0]);
+}));
+
+/**
+ * PUT /extractor-patterns/:id
+ * Update an extractor pattern
+ */
+router.put('/extractor-patterns/:id', asyncHandler(async (req, res) => {
+  const sql = getConnection();
+  const { id } = req.params;
+  const {
+    name,
+    description,
+    attributePattern,
+    entityType,
+    patterns,
+    targetUnit,
+    unitConversions,
+    isActive,
+    priority
+  } = req.body;
+
+  // Check pattern exists
+  const existing = await sql`SELECT id FROM truth_ledger_claude.extractor_patterns WHERE id = ${id}`;
+  if (existing.length === 0) {
+    res.status(404).json({ error: 'Extractor pattern not found' });
+    return;
+  }
+
+  // Validate regex patterns if provided
+  if (patterns) {
+    try {
+      for (const pattern of patterns) {
+        new RegExp(pattern, 'i');
+      }
+    } catch (e: any) {
+      res.status(400).json({ error: `Invalid regex pattern: ${e.message}` });
+      return;
+    }
+  }
+
+  const result = await sql`
+    UPDATE truth_ledger_claude.extractor_patterns
+    SET
+      name = COALESCE(${name}, name),
+      description = COALESCE(${description}, description),
+      attribute_pattern = COALESCE(${attributePattern}, attribute_pattern),
+      entity_type = COALESCE(${entityType}, entity_type),
+      patterns = COALESCE(${patterns ? JSON.stringify(patterns) : null}, patterns),
+      target_unit = COALESCE(${targetUnit}, target_unit),
+      unit_conversions = COALESCE(${unitConversions ? JSON.stringify(unitConversions) : null}, unit_conversions),
+      is_active = COALESCE(${isActive}, is_active),
+      priority = COALESCE(${priority}, priority),
+      updated_at = NOW()
+    WHERE id = ${id}
+    RETURNING
+      id,
+      name,
+      description,
+      attribute_pattern as "attributePattern",
+      entity_type as "entityType",
+      patterns,
+      target_unit as "targetUnit",
+      unit_conversions as "unitConversions",
+      is_active as "isActive",
+      priority,
+      created_at as "createdAt",
+      updated_at as "updatedAt"
+  `;
+
+  res.json(result[0]);
+}));
+
+/**
+ * DELETE /extractor-patterns/:id
+ * Delete an extractor pattern
+ */
+router.delete('/extractor-patterns/:id', asyncHandler(async (req, res) => {
+  const sql = getConnection();
+  const { id } = req.params;
+
+  // Check pattern exists
+  const existing = await sql`SELECT id FROM truth_ledger_claude.extractor_patterns WHERE id = ${id}`;
+  if (existing.length === 0) {
+    res.status(404).json({ error: 'Extractor pattern not found' });
+    return;
+  }
+
+  await sql`DELETE FROM truth_ledger_claude.extractor_patterns WHERE id = ${id}`;
+
+  res.json({ success: true, message: 'Extractor pattern deleted' });
+}));
+
+/**
+ * POST /extractor-patterns/:id/test
+ * Test an extractor pattern against sample text
+ */
+router.post('/extractor-patterns/:id/test', asyncHandler(async (req, res) => {
+  const sql = getConnection();
+  const { id } = req.params;
+  const { text } = req.body;
+
+  if (!text) {
+    res.status(400).json({ error: 'text is required' });
+    return;
+  }
+
+  // Get the pattern
+  const patterns = await sql`
+    SELECT patterns, target_unit as "targetUnit", unit_conversions as "unitConversions"
+    FROM truth_ledger_claude.extractor_patterns
+    WHERE id = ${id}
+  `;
+
+  if (patterns.length === 0) {
+    res.status(404).json({ error: 'Extractor pattern not found' });
+    return;
+  }
+
+  const pattern = patterns[0];
+  const regexPatterns = pattern.patterns as string[];
+  const unitConversions = pattern.unitConversions as Record<string, number>;
+  const targetUnit = pattern.targetUnit as string;
+
+  // Test each pattern against the text
+  const matches: Array<{
+    pattern: string;
+    match: string;
+    value: number;
+    unit: string | null;
+    convertedValue: number | null;
+  }> = [];
+
+  for (const regexStr of regexPatterns) {
+    try {
+      const regex = new RegExp(regexStr, 'gi');
+      let match;
+      while ((match = regex.exec(text)) !== null) {
+        const rawValue = parseFloat(match[1]?.replace(/,/g, '') || '0');
+        const unit = match[2]?.toLowerCase() || null;
+        const conversionFactor = unit ? (unitConversions[unit] || 1) : 1;
+
+        matches.push({
+          pattern: regexStr,
+          match: match[0],
+          value: rawValue,
+          unit,
+          convertedValue: rawValue * conversionFactor
+        });
+      }
+    } catch (e) {
+      // Skip invalid regex
+    }
+  }
+
+  res.json({
+    matches,
+    targetUnit,
+    matchCount: matches.length
+  });
+}));
+
 // ============================================================================
 // CONFLICT GROUP ENDPOINTS
 // ============================================================================
@@ -305,6 +732,87 @@ router.get('/entities/:entityId/conflicts', asyncHandler(async (req, res) => {
 router.get('/sources', asyncHandler(async (req, res) => {
   const sources = await SourceManager.getSources();
   res.json({ sources, count: sources.length });
+}));
+
+/**
+ * GET /sources/pipeline-stats
+ * Get per-source contribution through all pipeline stages
+ */
+router.get('/sources/pipeline-stats', asyncHandler(async (_req, res) => {
+  const sql = getConnection();
+
+  const sources = await sql`
+    SELECT
+      s.id,
+      s.name,
+      s.source_type as "sourceType",
+      s.base_trust as "baseTrust",
+      s.is_active as "isActive",
+      COALESCE(doc_counts.count, 0)::int as documents,
+      COALESCE(snippet_counts.count, 0)::int as snippets,
+      COALESCE(claim_counts.count, 0)::int as claims,
+      COALESCE(evidence_counts.count, 0)::int as evidence,
+      doc_counts.last_retrieved as "lastDocumentAt",
+      claim_counts.last_created as "lastClaimAt"
+    FROM truth_ledger_claude.sources s
+    LEFT JOIN (
+      SELECT source_id, COUNT(*)::int as count, MAX(retrieved_at) as last_retrieved
+      FROM truth_ledger_claude.documents
+      GROUP BY source_id
+    ) doc_counts ON doc_counts.source_id = s.id
+    LEFT JOIN (
+      SELECT d.source_id, COUNT(*)::int as count
+      FROM truth_ledger_claude.snippets sn
+      JOIN truth_ledger_claude.documents d ON sn.document_id = d.id
+      GROUP BY d.source_id
+    ) snippet_counts ON snippet_counts.source_id = s.id
+    LEFT JOIN (
+      SELECT d.source_id, COUNT(DISTINCT c.id)::int as count, MAX(c.created_at) as last_created
+      FROM truth_ledger_claude.claims c
+      JOIN truth_ledger_claude.evidence e ON e.claim_id = c.id
+      JOIN truth_ledger_claude.snippets sn ON e.snippet_id = sn.id
+      JOIN truth_ledger_claude.documents d ON sn.document_id = d.id
+      GROUP BY d.source_id
+    ) claim_counts ON claim_counts.source_id = s.id
+    LEFT JOIN (
+      SELECT d.source_id, COUNT(*)::int as count
+      FROM truth_ledger_claude.evidence e
+      JOIN truth_ledger_claude.snippets sn ON e.snippet_id = sn.id
+      JOIN truth_ledger_claude.documents d ON sn.document_id = d.id
+      GROUP BY d.source_id
+    ) evidence_counts ON evidence_counts.source_id = s.id
+    ORDER BY documents DESC, s.name
+  `;
+
+  // Calculate totals
+  const totals = await sql`
+    SELECT
+      (SELECT COUNT(*)::int FROM truth_ledger_claude.documents) as documents,
+      (SELECT COUNT(*)::int FROM truth_ledger_claude.snippets) as snippets,
+      (SELECT COUNT(*)::int FROM truth_ledger_claude.claims) as claims,
+      (SELECT COUNT(*)::int FROM truth_ledger_claude.evidence) as evidence
+  `;
+
+  res.json({
+    sources: sources.map(s => ({
+      id: s.id,
+      name: s.name,
+      sourceType: s.sourceType,
+      baseTrust: s.baseTrust,
+      isActive: s.isActive,
+      stats: {
+        documents: s.documents,
+        snippets: s.snippets,
+        claims: s.claims,
+        evidence: s.evidence,
+      },
+      recentActivity: {
+        lastDocumentAt: s.lastDocumentAt,
+        lastClaimAt: s.lastClaimAt,
+      },
+    })),
+    totals: totals[0],
+  });
 }));
 
 /**
@@ -1295,6 +1803,14 @@ function initializeJobCleanup() {
 // Job definitions with full metadata
 const JOB_DEFINITIONS = [
   {
+    id: 'url_ingest',
+    name: 'URL Ingest',
+    description: 'Fetch and ingest content from all active source URLs in the database',
+    category: 'ingestion',
+    estimatedDuration: '5-30 minutes',
+    affects: ['documents', 'snippets'],
+  },
+  {
     id: 'feed_ingest',
     name: 'Feed Ingest',
     description: 'Fetch and ingest content from all active RSS/Atom feeds',
@@ -1337,7 +1853,7 @@ const JOB_DEFINITIONS = [
   {
     id: 'full_pipeline',
     name: 'Full Pipeline',
-    description: 'Run all processing stages: extract → conflicts → derive → score',
+    description: 'Run all processing stages: extract → conflicts → derive → score. Note: Run URL Ingest or Feed Ingest first to fetch new content.',
     category: 'orchestration',
     estimatedDuration: '5-40 minutes',
     affects: ['claims', 'evidence', 'conflict_groups', 'field_links', 'truth_metrics'],
@@ -1387,6 +1903,7 @@ router.get('/pipeline/jobs', asyncHandler(async (_req, res) => {
 
   const jobs = JOB_DEFINITIONS.map(job => {
     const syncType = job.id === 'full_pipeline' ? 'truth_score' :
+                     job.id === 'url_ingest' ? 'url_ingest' :
                      job.id === 'feed_ingest' ? 'feed_ingest' :
                      job.id === 'conflicts' ? 'conflict_detection' :
                      `truth_${job.id}`;
@@ -1458,6 +1975,7 @@ router.post('/pipeline/jobs/:jobId/run', asyncHandler(async (req, res) => {
 
   // Also check database for running jobs (handles server restart case)
   const syncType = jobId === 'full_pipeline' ? 'full_pipeline' :
+                   jobId === 'url_ingest' ? 'url_ingest' :
                    jobId === 'feed_ingest' ? 'feed_ingest' :
                    jobId === 'conflicts' ? 'conflict_detection' :
                    `truth_${jobId}`;
@@ -1544,6 +2062,7 @@ router.post('/pipeline/jobs/:jobId/cancel', asyncHandler(async (req, res) => {
 
   // Update sync_status
   const syncType = jobId === 'full_pipeline' ? 'full_pipeline' :
+                   jobId === 'url_ingest' ? 'url_ingest' :
                    jobId === 'feed_ingest' ? 'feed_ingest' :
                    jobId === 'conflicts' ? 'conflict_detection' :
                    `truth_${jobId}`;
@@ -1593,6 +2112,7 @@ async function executeJob(jobId: string, runId: string, sql: ReturnType<typeof g
   };
 
   const syncType = jobId === 'full_pipeline' ? 'full_pipeline' :
+                   jobId === 'url_ingest' ? 'url_ingest' :
                    jobId === 'feed_ingest' ? 'feed_ingest' :
                    jobId === 'conflicts' ? 'conflict_detection' :
                    `truth_${jobId}`;
@@ -1604,6 +2124,81 @@ async function executeJob(jobId: string, runId: string, sql: ReturnType<typeof g
     let recordsSynced = 0;
 
     switch (jobId) {
+      case 'url_ingest': {
+        updateProgress(5, 100, 'Fetching active sources from database...');
+        const ingestor = new Ingestor();
+
+        // Get all active sources with URLs
+        const sources = await sql<{ id: string; name: string; source_type: string; default_doc_type: string | null }[]>`
+          SELECT id, name, source_type, default_doc_type
+          FROM truth_ledger_claude.sources
+          WHERE is_active = true
+          ORDER BY base_trust DESC, name
+        `;
+
+        log(`Found ${sources.length} active sources`);
+        let totalDocs = 0;
+        let totalSnippets = 0;
+
+        // Map source_type to doc_type
+        const docTypeMap: Record<string, 'company_news' | 'technical_report' | 'news_article' | 'wiki' | 'other'> = {
+          manufacturer: 'company_news',
+          government_agency: 'technical_report',
+          government: 'technical_report',
+          research: 'technical_report',
+          technical_database: 'technical_report',
+          news: 'news_article',
+          wiki: 'wiki',
+        };
+
+        for (let i = 0; i < sources.length; i++) {
+          checkCancelled();
+          const source = sources[i];
+          const progress = 5 + Math.floor((i / sources.length) * 90);
+          updateProgress(progress, 100, `Processing ${source.name}...`);
+
+          // Get active URLs for this source
+          const urls = await sql<{ url: string }[]>`
+            SELECT url FROM truth_ledger_claude.source_urls
+            WHERE source_id = ${source.id} AND is_active = true
+          `;
+
+          if (urls.length === 0) {
+            log(`Skipping ${source.name}: no active URLs`);
+            continue;
+          }
+
+          log(`Ingesting ${urls.length} URLs from ${source.name}...`);
+          const docType = docTypeMap[source.source_type] ?? (source.default_doc_type as any) ?? 'other';
+
+          try {
+            const result = await ingestor.ingest({
+              sourceId: source.id,
+              urls: urls.map(u => u.url),
+              docType,
+              fetchTimeout: 45000,
+            });
+            totalDocs += result.documentsCreated + result.documentsUpdated;
+            totalSnippets += result.snippetsCreated;
+            log(`  ${source.name}: ${result.documentsCreated} docs, ${result.snippetsCreated} snippets`);
+
+            // Update last_fetched_at
+            await sql`
+              UPDATE truth_ledger_claude.source_urls
+              SET last_fetched_at = NOW()
+              WHERE source_id = ${source.id} AND is_active = true
+            `;
+          } catch (err) {
+            log(`  Error with ${source.name}: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
+
+        recordsSynced = totalDocs + totalSnippets;
+        log(`URL ingestion complete: ${totalDocs} documents, ${totalSnippets} snippets`);
+        updateProgress(100, 100, `Ingested ${totalDocs} documents, ${totalSnippets} snippets`);
+        break;
+      }
+
       case 'feed_ingest': {
         updateProgress(10, 100, 'Fetching feeds from database...');
         const fetcher = new FeedFetcher();
@@ -1736,9 +2331,12 @@ async function executeJob(jobId: string, runId: string, sql: ReturnType<typeof g
     await sql`
       UPDATE sync_status
       SET state = 'success', completed_at = NOW(), records_synced = ${recordsSynced}
-      WHERE sync_type = ${syncType} AND state = 'running'
-      ORDER BY started_at DESC
-      LIMIT 1
+      WHERE id = (
+        SELECT id FROM sync_status
+        WHERE sync_type = ${syncType} AND state = 'running'
+        ORDER BY started_at DESC
+        LIMIT 1
+      )
     `;
     log('Database sync_status updated to success');
 
@@ -1989,6 +2587,323 @@ router.get('/pipeline/data-flow', asyncHandler(async (_req, res) => {
     current: flow[0],
     growth: growth,
   });
+}));
+
+// ============================================================================
+// PIPELINE VISUALIZATION ENDPOINTS
+// ============================================================================
+
+/**
+ * GET /pipeline/stage/:stage/details
+ * Get detailed breakdown for a specific pipeline stage
+ */
+router.get('/pipeline/stage/:stage/details', asyncHandler(async (req, res) => {
+  const sql = getConnection();
+  const { stage } = req.params;
+  const limit = parseInt(req.query.limit as string) || 10;
+
+  let result;
+
+  switch (stage) {
+    case 'documents': {
+      const bySource = await sql`
+        SELECT
+          s.id as "sourceId",
+          s.name as "sourceName",
+          COUNT(*)::int as count
+        FROM truth_ledger_claude.documents d
+        JOIN truth_ledger_claude.sources s ON d.source_id = s.id
+        GROUP BY s.id, s.name
+        ORDER BY count DESC
+      `;
+      const total = bySource.reduce((sum, s) => sum + s.count, 0);
+      const samples = await sql`
+        SELECT id, title, url, doc_type as "docType", created_at as "createdAt"
+        FROM truth_ledger_claude.documents
+        ORDER BY created_at DESC
+        LIMIT ${limit}
+      `;
+      const stats = await sql`
+        SELECT
+          COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours')::int as last_24h,
+          COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days')::int as last_7d
+        FROM truth_ledger_claude.documents
+      `;
+      result = {
+        stage: 'documents',
+        totalCount: total,
+        bySource: bySource.map(s => ({ ...s, percentage: Math.round((s.count / total) * 100) })),
+        samples,
+        processingStats: { last24h: stats[0].last_24h, last7d: stats[0].last_7d },
+      };
+      break;
+    }
+    case 'snippets': {
+      const bySource = await sql`
+        SELECT
+          s.id as "sourceId",
+          s.name as "sourceName",
+          COUNT(*)::int as count
+        FROM truth_ledger_claude.snippets sn
+        JOIN truth_ledger_claude.documents d ON sn.document_id = d.id
+        JOIN truth_ledger_claude.sources s ON d.source_id = s.id
+        GROUP BY s.id, s.name
+        ORDER BY count DESC
+      `;
+      const total = bySource.reduce((sum, s) => sum + s.count, 0);
+      const samples = await sql`
+        SELECT sn.id, sn.locator, LEFT(sn.text, 200) as text, sn.snippet_type as "snippetType", sn.created_at as "createdAt"
+        FROM truth_ledger_claude.snippets sn
+        ORDER BY sn.created_at DESC
+        LIMIT ${limit}
+      `;
+      const stats = await sql`
+        SELECT
+          COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours')::int as last_24h,
+          COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days')::int as last_7d
+        FROM truth_ledger_claude.snippets
+      `;
+      result = {
+        stage: 'snippets',
+        totalCount: total,
+        bySource: bySource.map(s => ({ ...s, percentage: Math.round((s.count / total) * 100) })),
+        samples,
+        processingStats: { last24h: stats[0].last_24h, last7d: stats[0].last_7d },
+      };
+      break;
+    }
+    case 'claims': {
+      const bySource = await sql`
+        SELECT
+          s.id as "sourceId",
+          s.name as "sourceName",
+          COUNT(DISTINCT c.id)::int as count
+        FROM truth_ledger_claude.claims c
+        JOIN truth_ledger_claude.evidence e ON e.claim_id = c.id
+        JOIN truth_ledger_claude.snippets sn ON e.snippet_id = sn.id
+        JOIN truth_ledger_claude.documents d ON sn.document_id = d.id
+        JOIN truth_ledger_claude.sources s ON d.source_id = s.id
+        GROUP BY s.id, s.name
+        ORDER BY count DESC
+      `;
+      const total = bySource.reduce((sum, s) => sum + s.count, 0);
+      const samples = await sql`
+        SELECT c.id, c.value_json as "valueJson", c.unit, c.scope_json as "scopeJson",
+               ent.canonical_name as "entityName", attr.canonical_name as "attributeName",
+               c.created_at as "createdAt"
+        FROM truth_ledger_claude.claims c
+        LEFT JOIN truth_ledger_claude.entities ent ON c.entity_id = ent.id
+        LEFT JOIN truth_ledger_claude.attributes attr ON c.attribute_id = attr.id
+        ORDER BY c.created_at DESC
+        LIMIT ${limit}
+      `;
+      const stats = await sql`
+        SELECT
+          COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours')::int as last_24h,
+          COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days')::int as last_7d
+        FROM truth_ledger_claude.claims
+      `;
+      result = {
+        stage: 'claims',
+        totalCount: total,
+        bySource: bySource.map(s => ({ ...s, percentage: total > 0 ? Math.round((s.count / total) * 100) : 0 })),
+        samples,
+        processingStats: { last24h: stats[0].last_24h, last7d: stats[0].last_7d },
+      };
+      break;
+    }
+    case 'evidence': {
+      const bySource = await sql`
+        SELECT
+          s.id as "sourceId",
+          s.name as "sourceName",
+          COUNT(*)::int as count
+        FROM truth_ledger_claude.evidence e
+        JOIN truth_ledger_claude.snippets sn ON e.snippet_id = sn.id
+        JOIN truth_ledger_claude.documents d ON sn.document_id = d.id
+        JOIN truth_ledger_claude.sources s ON d.source_id = s.id
+        GROUP BY s.id, s.name
+        ORDER BY count DESC
+      `;
+      const total = bySource.reduce((sum, s) => sum + s.count, 0);
+      const samples = await sql`
+        SELECT e.id, e.quote, e.stance, e.extraction_confidence as "confidence", e.created_at as "createdAt"
+        FROM truth_ledger_claude.evidence e
+        ORDER BY e.created_at DESC
+        LIMIT ${limit}
+      `;
+      const stats = await sql`
+        SELECT
+          COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours')::int as last_24h,
+          COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days')::int as last_7d
+        FROM truth_ledger_claude.evidence
+      `;
+      result = {
+        stage: 'evidence',
+        totalCount: total,
+        bySource: bySource.map(s => ({ ...s, percentage: total > 0 ? Math.round((s.count / total) * 100) : 0 })),
+        samples,
+        processingStats: { last24h: stats[0].last_24h, last7d: stats[0].last_7d },
+      };
+      break;
+    }
+    case 'conflicts': {
+      const byEntity = await sql`
+        SELECT
+          ent.id as "entityId",
+          ent.canonical_name as "entityName",
+          COUNT(*)::int as count
+        FROM truth_ledger_claude.conflict_groups cg
+        JOIN truth_ledger_claude.entities ent ON cg.entity_id = ent.id
+        WHERE cg.conflict_present = true
+        GROUP BY ent.id, ent.canonical_name
+        ORDER BY count DESC
+      `;
+      const total = byEntity.reduce((sum, e) => sum + e.count, 0);
+      const samples = await sql`
+        SELECT cg.id, cg.claim_count as "claimCount", cg.status_factual as "statusFactual",
+               ent.canonical_name as "entityName", attr.canonical_name as "attributeName",
+               cg.created_at as "createdAt"
+        FROM truth_ledger_claude.conflict_groups cg
+        LEFT JOIN truth_ledger_claude.entities ent ON cg.entity_id = ent.id
+        LEFT JOIN truth_ledger_claude.attributes attr ON cg.attribute_id = attr.id
+        WHERE cg.conflict_present = true
+        ORDER BY cg.created_at DESC
+        LIMIT ${limit}
+      `;
+      result = {
+        stage: 'conflicts',
+        totalCount: total,
+        bySource: byEntity.map(e => ({ sourceId: e.entityId, sourceName: e.entityName, count: e.count, percentage: total > 0 ? Math.round((e.count / total) * 100) : 0 })),
+        samples,
+        processingStats: { last24h: 0, last7d: 0 },
+      };
+      break;
+    }
+    case 'metrics': {
+      const stats = await sql`
+        SELECT
+          COUNT(*)::int as total,
+          AVG(truth_raw)::numeric(4,2) as avg_truth,
+          COUNT(*) FILTER (WHERE truth_raw >= 0.7)::int as high_confidence,
+          COUNT(*) FILTER (WHERE truth_raw < 0.3)::int as low_confidence
+        FROM truth_ledger_claude.truth_metrics
+      `;
+      const samples = await sql`
+        SELECT tm.id, tm.truth_raw as "truthRaw", tm.support_score as "supportScore",
+               tm.contradiction_score as "contradictionScore", tm.independent_sources as "independentSources",
+               tm.created_at as "createdAt"
+        FROM truth_ledger_claude.truth_metrics tm
+        ORDER BY tm.created_at DESC
+        LIMIT ${limit}
+      `;
+      result = {
+        stage: 'metrics',
+        totalCount: stats[0].total,
+        summary: {
+          avgTruth: stats[0].avg_truth,
+          highConfidence: stats[0].high_confidence,
+          lowConfidence: stats[0].low_confidence,
+        },
+        bySource: [],
+        samples,
+        processingStats: { last24h: 0, last7d: 0 },
+      };
+      break;
+    }
+    default:
+      res.status(400).json({ error: `Unknown stage: ${stage}` });
+      return;
+  }
+
+  res.json(result);
+}));
+
+// ============================================================================
+// TREE DRILL-DOWN ENDPOINTS
+// ============================================================================
+
+/**
+ * GET /documents/:id/snippets
+ * Get snippets for a specific document
+ */
+router.get('/documents/:id/snippets', asyncHandler(async (req, res) => {
+  const sql = getConnection();
+  const { id } = req.params;
+  const limit = parseInt(req.query.limit as string) || 50;
+
+  const snippets = await sql`
+    SELECT
+      id,
+      locator,
+      LEFT(text, 500) as text,
+      snippet_type as "snippetType",
+      created_at as "createdAt"
+    FROM truth_ledger_claude.snippets
+    WHERE document_id = ${id}
+    ORDER BY locator
+    LIMIT ${limit}
+  `;
+
+  res.json({ snippets, total: snippets.length });
+}));
+
+/**
+ * GET /snippets/:id/claims
+ * Get claims extracted from a specific snippet
+ */
+router.get('/snippets/:id/claims', asyncHandler(async (req, res) => {
+  const sql = getConnection();
+  const { id } = req.params;
+
+  const claims = await sql`
+    SELECT
+      c.id,
+      c.value_json as "valueJson",
+      c.unit,
+      c.scope_json as "scopeJson",
+      ent.canonical_name as "entityName",
+      attr.canonical_name as "attributeName",
+      e.stance,
+      e.extraction_confidence as "confidence",
+      e.quote
+    FROM truth_ledger_claude.evidence e
+    JOIN truth_ledger_claude.claims c ON e.claim_id = c.id
+    LEFT JOIN truth_ledger_claude.entities ent ON c.entity_id = ent.id
+    LEFT JOIN truth_ledger_claude.attributes attr ON c.attribute_id = attr.id
+    WHERE e.snippet_id = ${id}
+  `;
+
+  res.json({ claims, total: claims.length });
+}));
+
+/**
+ * GET /claims/:id/evidence
+ * Get all evidence for a specific claim
+ */
+router.get('/claims/:id/evidence', asyncHandler(async (req, res) => {
+  const sql = getConnection();
+  const { id } = req.params;
+
+  const evidence = await sql`
+    SELECT
+      e.id,
+      e.quote,
+      e.stance,
+      e.extraction_confidence as "confidence",
+      sn.locator,
+      sn.text as "snippetText",
+      d.title as "documentTitle",
+      d.url as "documentUrl",
+      s.name as "sourceName"
+    FROM truth_ledger_claude.evidence e
+    JOIN truth_ledger_claude.snippets sn ON e.snippet_id = sn.id
+    JOIN truth_ledger_claude.documents d ON sn.document_id = d.id
+    JOIN truth_ledger_claude.sources s ON d.source_id = s.id
+    WHERE e.claim_id = ${id}
+  `;
+
+  res.json({ evidence, total: evidence.length });
 }));
 
 export default router;

@@ -18,6 +18,18 @@ import type {
   CreateFeedInput,
   UpdateFeedInput,
   CreateUrlInput,
+  SourcePipelineStats,
+  StageDetails,
+  SourceDocuments,
+  DocumentSnippets,
+  SnippetClaims,
+  ClaimEvidence,
+  ExtractorPattern,
+  CreateExtractorPatternInput,
+  UpdateExtractorPatternInput,
+  PatternTestResult,
+  CreateEntityInput,
+  UpdateEntityInput,
 } from './types';
 
 const api = axios.create({
@@ -126,6 +138,77 @@ export const entityApi = {
       // Filter out facts with no value
       return fact.bestValue !== null && fact.bestValue !== undefined;
     });
+  },
+
+  create: async (input: CreateEntityInput): Promise<Entity> => {
+    const response = await api.post('/entities', input);
+    const raw = response.data as Record<string, unknown>;
+    return {
+      id: raw.id as string,
+      type: (raw.entityType || raw.entity_type || raw.type) as string,
+      name: (raw.canonicalName || raw.canonical_name || raw.name) as string,
+      aliases: (raw.aliases || []) as string[],
+      description: (raw.description || null) as string | null,
+      metadata: (raw.metadata || {}) as Record<string, unknown>,
+      createdAt: (raw.createdAt || raw.created_at) as string,
+      updatedAt: (raw.updatedAt || raw.updated_at) as string,
+    };
+  },
+
+  update: async (id: string, input: UpdateEntityInput): Promise<Entity> => {
+    const response = await api.put(`/entities/${id}`, input);
+    const raw = response.data as Record<string, unknown>;
+    return {
+      id: raw.id as string,
+      type: (raw.entityType || raw.entity_type || raw.type) as string,
+      name: (raw.canonicalName || raw.canonical_name || raw.name) as string,
+      aliases: (raw.aliases || []) as string[],
+      description: (raw.description || null) as string | null,
+      metadata: (raw.metadata || {}) as Record<string, unknown>,
+      createdAt: (raw.createdAt || raw.created_at) as string,
+      updatedAt: (raw.updatedAt || raw.updated_at) as string,
+    };
+  },
+
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/entities/${id}`);
+  },
+};
+
+// Extractor Pattern API
+export const extractorPatternApi = {
+  list: async (params?: { active?: boolean; entityType?: string }): Promise<{ patterns: ExtractorPattern[]; count: number }> => {
+    const response = await api.get('/extractor-patterns', {
+      params: {
+        active: params?.active,
+        entity_type: params?.entityType,
+      },
+    });
+    return response.data;
+  },
+
+  get: async (id: string): Promise<ExtractorPattern> => {
+    const response = await api.get(`/extractor-patterns/${id}`);
+    return response.data;
+  },
+
+  create: async (input: CreateExtractorPatternInput): Promise<ExtractorPattern> => {
+    const response = await api.post('/extractor-patterns', input);
+    return response.data;
+  },
+
+  update: async (id: string, input: UpdateExtractorPatternInput): Promise<ExtractorPattern> => {
+    const response = await api.put(`/extractor-patterns/${id}`, input);
+    return response.data;
+  },
+
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/extractor-patterns/${id}`);
+  },
+
+  test: async (id: string, text: string): Promise<PatternTestResult> => {
+    const response = await api.post(`/extractor-patterns/${id}/test`, { text });
+    return response.data;
   },
 };
 
@@ -535,6 +618,38 @@ export const pipelineApi = {
   // Feed status
   getFeedsStatus: async (): Promise<{ feeds: FeedStatus[]; summary: FeedStatusSummary }> => {
     const response = await api.get('/pipeline/feeds/status');
+    return response.data;
+  },
+
+  // Pipeline visualization
+  getSourcePipelineStats: async (): Promise<SourcePipelineStats> => {
+    const response = await api.get('/sources/pipeline-stats');
+    return response.data;
+  },
+
+  getStageDetails: async (stage: string, limit?: number): Promise<StageDetails> => {
+    const response = await api.get(`/pipeline/stage/${stage}/details`, { params: { limit } });
+    return response.data;
+  },
+
+  // Tree drill-down
+  getSourceDocuments: async (sourceId: string, limit?: number): Promise<SourceDocuments> => {
+    const response = await api.get(`/sources/${sourceId}/documents`, { params: { limit } });
+    return response.data;
+  },
+
+  getDocumentSnippets: async (documentId: string, limit?: number): Promise<DocumentSnippets> => {
+    const response = await api.get(`/documents/${documentId}/snippets`, { params: { limit } });
+    return response.data;
+  },
+
+  getSnippetClaims: async (snippetId: string): Promise<SnippetClaims> => {
+    const response = await api.get(`/snippets/${snippetId}/claims`);
+    return response.data;
+  },
+
+  getClaimEvidence: async (claimId: string): Promise<ClaimEvidence> => {
+    const response = await api.get(`/claims/${claimId}/evidence`);
     return response.data;
   },
 };

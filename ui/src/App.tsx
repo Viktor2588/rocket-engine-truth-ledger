@@ -11,6 +11,7 @@ import { ConflictDetail } from '@/pages/ConflictDetail';
 import { ReviewQueue } from '@/pages/ReviewQueue';
 import { Pipeline } from '@/pages/Pipeline';
 import { Sources } from '@/pages/Sources';
+import Configuration from '@/pages/Configuration';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -38,6 +39,7 @@ function App() {
                 <Route path="review" element={<ReviewQueue />} />
                 <Route path="pipeline" element={<Pipeline />} />
                 <Route path="sources" element={<Sources />} />
+                <Route path="configuration" element={<Configuration />} />
               </Route>
             </Routes>
           </BrowserRouter>

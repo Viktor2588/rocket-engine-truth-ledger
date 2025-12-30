@@ -204,13 +204,22 @@ export const IspExtractor = new NumericExtractor(
   'engines.isp_s',
   [
     /(?:isp|specific\s+impulse)[:\s]+(\d+(?:\.\d+)?)\s*(s|seconds?)?/i,
-    /(\d{2,3}(?:\.\d+)?)\s*(?:s|seconds?)\s+(?:isp|specific\s+impulse)/i,
-    /isp\s*(?:sl|sea\s*level|vac|vacuum)?[:\s]*(\d+(?:\.\d+)?)/i,
+    /(\d{2,3}(?:\.\d+)?)\s*(s|seconds?)\s+(?:isp|specific\s+impulse)/i,
+    /isp\s*(?:sl|sea\s*level|vac|vacuum)?[:\s]*(\d+(?:\.\d+)?)\s*(s)?/i,
     // Wikipedia formats: "Specific impulse Sea level: 300 s" or "Vacuum: 335.1 s"
-    /specific\s+impulse[^:]*:\s*(\d+(?:\.\d+)?)\s*s/i,
-    /(?:sea\s*level|vacuum|vac|sl):\s*(\d{2,3}(?:\.\d+)?)\s*s(?:\s*\(|$|\s)/i,
+    /specific\s+impulse[^:]*:\s*(\d+(?:\.\d+)?)\s*(s|seconds?)/i,
+    /(?:sea\s*level|vacuum|vac|sl):\s*(\d{2,3}(?:\.\d+)?)\s*(s|seconds?)(?:\s*\(|$|\s)/i,
+    // Handle "ISP of X seconds" format
+    /isp\s+(?:of\s+)?(\d+(?:\.\d+)?)\s*(s|seconds?)/i,
+    // Handle "X seconds ISP" or "X second specific impulse"
+    /(\d{2,3}(?:\.\d+)?)\s*(s|seconds?)\s+(?:isp|specific\s+impulse)/i,
   ],
-  's'
+  's',
+  new Map([
+    ['s', 1],
+    ['seconds', 1],
+    ['second', 1],
+  ])
 );
 
 /**
@@ -226,6 +235,12 @@ export const ThrustExtractor = new NumericExtractor(
     /(?:total\s+)?thrust\s+(\d+(?:,\d{3})*(?:\.\d+)?)\s*(n|kn|mn|lbf)?/i,
     // Format: "10.62 MN" or "2,400 kN" with thrust context nearby
     /(\d+(?:,\d{3})*(?:\.\d+)?)\s*(kn|mn)\s*(?:\(|thrust|$)/i,
+    // Handle "thrust of X kilonewtons/meganewtons" format
+    /thrust\s+(?:of\s+)?(\d+(?:,\d{3})*(?:\.\d+)?)\s*(kilonewtons?|meganewtons?|newtons?)/i,
+    // Handle "X,XXX lbf thrust" or "X,XXX kN thrust"
+    /(\d+(?:,\d{3})*(?:\.\d+)?)\s*(kilonewtons?|meganewtons?|newtons?|kn|mn|lbf)/i,
+    // Handle parenthetical conversions like "(1,500,000 lbf)"
+    /\((\d+(?:,\d{3})*(?:\.\d+)?)\s*(lbf)\)/i,
   ],
   'N',
   new Map([
@@ -234,6 +249,11 @@ export const ThrustExtractor = new NumericExtractor(
     ['mn', 1000000],
     ['lbf', 4.44822],
     ['klbf', 4448.22],
+    ['newtons', 1],
+    ['kilonewtons', 1000],
+    ['kilonewton', 1000],
+    ['meganewtons', 1000000],
+    ['meganewton', 1000000],
   ])
 );
 
@@ -291,7 +311,7 @@ export const PayloadLeoExtractor = new NumericExtractor(
   ])
 );
 
-// Default extractors registry
+// Default extractors registry (fallback when database patterns not available)
 export const DEFAULT_EXTRACTORS: AttributeExtractor[] = [
   IspExtractor,
   ThrustExtractor,
@@ -299,6 +319,64 @@ export const DEFAULT_EXTRACTORS: AttributeExtractor[] = [
   ChamberPressureExtractor,
   PayloadLeoExtractor,
 ];
+
+/**
+ * Load extractor patterns from the database and create NumericExtractor instances
+ */
+export async function loadExtractorsFromDatabase(): Promise<AttributeExtractor[]> {
+  const sql = getConnection();
+
+  try {
+    const patterns = await sql`
+      SELECT
+        id,
+        name,
+        attribute_pattern as "attributePattern",
+        entity_type as "entityType",
+        patterns,
+        target_unit as "targetUnit",
+        unit_conversions as "unitConversions"
+      FROM truth_ledger_claude.extractor_patterns
+      WHERE is_active = true
+      ORDER BY priority DESC, name
+    `;
+
+    const extractors: AttributeExtractor[] = [];
+
+    for (const pattern of patterns) {
+      try {
+        // Convert JSON patterns to RegExp array
+        const regexPatterns: RegExp[] = (pattern.patterns as string[]).map(p => new RegExp(p, 'i'));
+
+        // Convert unit conversions object to Map
+        const unitConversions = new Map<string, number>();
+        if (pattern.unitConversions) {
+          for (const [unit, factor] of Object.entries(pattern.unitConversions as Record<string, number>)) {
+            unitConversions.set(unit.toLowerCase(), factor);
+          }
+        }
+
+        const extractor = new NumericExtractor(
+          pattern.attributePattern as string,
+          regexPatterns,
+          (pattern.targetUnit as string) || '',
+          unitConversions
+        );
+
+        extractors.push(extractor);
+        console.log(`[Extractor] Loaded pattern: ${pattern.name} -> ${pattern.attributePattern}`);
+      } catch (e) {
+        console.error(`[Extractor] Failed to load pattern ${pattern.name}:`, e);
+      }
+    }
+
+    console.log(`[Extractor] Loaded ${extractors.length} patterns from database`);
+    return extractors;
+  } catch (e) {
+    console.error('[Extractor] Failed to load patterns from database, using defaults:', e);
+    return DEFAULT_EXTRACTORS;
+  }
+}
 
 // ============================================================================
 // ENTITY MATCHER
@@ -377,10 +455,22 @@ export class Extractor {
   private extractors: AttributeExtractor[];
   private entityMatcher: EntityMatcher;
   private attributeCache: Map<string, Attribute> = new Map();
+  private extractorsLoaded: boolean = false;
 
   constructor(extractors?: AttributeExtractor[]) {
+    // Start with defaults, will be replaced when loadExtractors is called
     this.extractors = extractors || DEFAULT_EXTRACTORS;
     this.entityMatcher = new EntityMatcher();
+  }
+
+  /**
+   * Load extractors from database (call before extract)
+   */
+  async loadExtractors(): Promise<void> {
+    if (!this.extractorsLoaded) {
+      this.extractors = await loadExtractorsFromDatabase();
+      this.extractorsLoaded = true;
+    }
   }
 
   /**
@@ -399,6 +489,9 @@ export class Extractor {
     };
 
     try {
+      // Load extractors from database
+      await this.loadExtractors();
+
       // Load entities and attributes
       await this.entityMatcher.loadEntities();
       await this.loadAttributes();
