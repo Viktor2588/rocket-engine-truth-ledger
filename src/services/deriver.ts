@@ -31,6 +31,10 @@ export interface DeriverConfig {
   fieldNames?: string[];
   forceRederive?: boolean;
   limit?: number;
+  /** Callback to check if job was cancelled - throws if cancelled */
+  checkCancelled?: () => void;
+  /** Callback to report progress */
+  onProgress?: (current: number, total: number, message: string) => void;
 }
 
 export interface DeriverResult {
@@ -138,8 +142,15 @@ export class Deriver {
     try {
       // Get entities to process
       const entities = await this.getEntitiesToProcess(config);
+      const totalEntities = entities.length;
 
-      for (const entity of entities) {
+      for (let i = 0; i < entities.length; i++) {
+        // Check for cancellation before processing each entity
+        if (config.checkCancelled) {
+          config.checkCancelled();
+        }
+
+        const entity = entities[i];
         try {
           const entityResult = await this.deriveForEntity(entity, config);
           result.derivedClaimsCreated += entityResult.derivedClaimsCreated;
@@ -150,6 +161,14 @@ export class Deriver {
             entityId: entity.id,
             error: error instanceof Error ? error.message : String(error),
           });
+        }
+
+        // Report progress every 5 entities or at completion
+        if ((i + 1) % 5 === 0 || i === totalEntities - 1) {
+          if (config.onProgress) {
+            const progressPct = Math.floor(((i + 1) / totalEntities) * 100);
+            config.onProgress(progressPct, 100, `Derived ${i + 1}/${totalEntities} entities`);
+          }
         }
       }
 

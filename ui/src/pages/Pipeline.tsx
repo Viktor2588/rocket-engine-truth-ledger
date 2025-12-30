@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   ArrowRight,
   Database,
@@ -12,22 +12,34 @@ import {
   Activity,
   TrendingUp,
   Layers,
-  ExternalLink,
-  ChevronDown,
-  ChevronRight,
+  Play,
+  Zap,
+  Brain,
+  Scale,
+  GitBranch,
+  AlertCircle,
+  Timer,
+  Loader2,
+  Square,
+  RotateCcw,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   usePipelineStatus,
   usePipelineStats,
   usePipelineDataFlow,
   usePipelineHistory,
-  useSourcesConfig,
-  useSourcesFeeds,
+  usePipelineJobs,
+  usePipelineFeedsStatus,
+  useRunJob,
+  useCancelJob,
 } from '@/hooks/useApi';
+import type { PipelineJob, FeedStatus } from '@/lib/api';
 
 // Format relative time
 function formatRelativeTime(dateString: string | null): string {
@@ -54,12 +66,44 @@ function formatDuration(seconds: number | null): string {
   return `${mins}m ${secs}s`;
 }
 
+// Live elapsed time component that updates every second
+function LiveElapsedTime({ startedAt }: { startedAt: string | Date }) {
+  const [elapsed, setElapsed] = useState('0s');
+
+  useEffect(() => {
+    const startTime = new Date(startedAt).getTime();
+
+    const updateElapsed = () => {
+      const now = Date.now();
+      const diffMs = now - startTime;
+      const totalSeconds = Math.floor(diffMs / 1000);
+      const mins = Math.floor(totalSeconds / 60);
+      const secs = totalSeconds % 60;
+
+      if (mins > 0) {
+        setElapsed(`${mins}m ${secs}s`);
+      } else {
+        setElapsed(`${secs}s`);
+      }
+    };
+
+    updateElapsed();
+    const interval = setInterval(updateElapsed, 1000);
+
+    return () => clearInterval(interval);
+  }, [startedAt]);
+
+  return <span className="font-mono tabular-nums">{elapsed}</span>;
+}
+
 // Status badge component
 function StatusBadge({ state }: { state: string }) {
   const variants: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: typeof CheckCircle }> = {
     success: { variant: 'default', icon: CheckCircle },
     running: { variant: 'secondary', icon: RefreshCw },
     failed: { variant: 'destructive', icon: XCircle },
+    cancelled: { variant: 'outline', icon: Square },
+    timeout: { variant: 'destructive', icon: Timer },
     pending: { variant: 'outline', icon: Clock },
   };
 
@@ -73,17 +117,292 @@ function StatusBadge({ state }: { state: string }) {
   );
 }
 
-// Pipeline flow diagram
+// Job category icons
+const categoryIcons: Record<string, typeof Rss> = {
+  ingestion: Rss,
+  processing: Brain,
+  scoring: Scale,
+  orchestration: GitBranch,
+};
+
+// ============================================================================
+// JOB RUNNER PANEL
+// ============================================================================
+
+function JobRunnerPanel() {
+  const { data: jobsData, isLoading } = usePipelineJobs();
+  const runJobMutation = useRunJob();
+  const cancelJobMutation = useCancelJob();
+  const [runningJobId, setRunningJobId] = useState<string | null>(null);
+  const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[1, 2, 3, 4, 5, 6].map((i) => (
+          <Skeleton key={i} className="h-48" />
+        ))}
+      </div>
+    );
+  }
+
+  const jobs = jobsData?.jobs || [];
+
+  const handleRunJob = async (jobId: string) => {
+    setRunningJobId(jobId);
+    try {
+      await runJobMutation.mutateAsync(jobId);
+    } finally {
+      setRunningJobId(null);
+    }
+  };
+
+  const handleCancelJob = async (jobId: string) => {
+    setCancellingJobId(jobId);
+    try {
+      await cancelJobMutation.mutateAsync(jobId);
+    } finally {
+      setCancellingJobId(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Running Jobs Alert */}
+      {jobs.some(j => j.isRunning) && (
+        <Card className="border-blue-500 bg-blue-500/5">
+          <CardContent className="py-4">
+            <div className="flex items-start gap-3">
+              <Loader2 className="h-5 w-5 animate-spin text-blue-500 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-medium text-blue-700 dark:text-blue-300">
+                  Jobs are running...
+                </p>
+                {jobs.filter(j => j.isRunning).map(job => (
+                  <div key={job.id} className="mt-3 p-3 bg-background/50 rounded-lg">
+                    <div className="flex items-center justify-between text-sm mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{job.name}</span>
+                        {job.runningInfo?.startedAt && (
+                          <span className="flex items-center gap-1 text-xs text-blue-500">
+                            <Timer className="h-3 w-3" />
+                            <LiveElapsedTime startedAt={job.runningInfo.startedAt} />
+                          </span>
+                        )}
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                        onClick={() => handleCancelJob(job.id)}
+                        disabled={cancellingJobId === job.id}
+                      >
+                        {cancellingJobId === job.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <>
+                            <Square className="h-3 w-3 mr-1" />
+                            Cancel
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    <Progress
+                      value={job.runningInfo?.progress?.current || 0}
+                      className="h-2"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {job.runningInfo?.progress?.message || 'Processing...'}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Job Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {jobs.map((job) => (
+          <JobCard
+            key={job.id}
+            job={job}
+            onRun={() => handleRunJob(job.id)}
+            onCancel={() => handleCancelJob(job.id)}
+            isTriggering={runningJobId === job.id}
+            isCancelling={cancellingJobId === job.id}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function JobCard({
+  job,
+  onRun,
+  onCancel,
+  isTriggering,
+  isCancelling,
+}: {
+  job: PipelineJob;
+  onRun: () => void;
+  onCancel: () => void;
+  isTriggering: boolean;
+  isCancelling: boolean;
+}) {
+  const CategoryIcon = categoryIcons[job.category] || Activity;
+
+  return (
+    <Card className={`transition-all ${
+      job.isRunning ? 'ring-2 ring-blue-500 animate-pulse' : ''
+    }`}>
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-2">
+            <div className={`p-2 rounded-lg ${
+              job.category === 'ingestion' ? 'bg-green-500/10 text-green-500' :
+              job.category === 'processing' ? 'bg-purple-500/10 text-purple-500' :
+              job.category === 'scoring' ? 'bg-yellow-500/10 text-yellow-500' :
+              'bg-blue-500/10 text-blue-500'
+            }`}>
+              <CategoryIcon className="h-5 w-5" />
+            </div>
+            <div>
+              <CardTitle className="text-base">{job.name}</CardTitle>
+              <Badge variant="outline" className="text-xs mt-1">
+                {job.category}
+              </Badge>
+            </div>
+          </div>
+          {job.lastRun && (
+            <StatusBadge state={job.isRunning ? 'running' : job.lastRun.state} />
+          )}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          {job.description}
+        </p>
+
+        <div className="space-y-2 text-xs">
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <Timer className="h-3 w-3" />
+              Est. duration
+            </span>
+            <span>{job.estimatedDuration}</span>
+          </div>
+
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <Layers className="h-3 w-3" />
+              Affects
+            </span>
+            <span>{job.affects.join(', ')}</span>
+          </div>
+
+          {job.lastRun && (
+            <>
+              <div className="flex items-center justify-between text-muted-foreground">
+                <span>Last run</span>
+                <span>{formatRelativeTime(job.lastRun.completedAt || job.lastRun.startedAt)}</span>
+              </div>
+              {job.lastRun.recordsSynced !== null && (
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span>Records processed</span>
+                  <span>{job.lastRun.recordsSynced.toLocaleString()}</span>
+                </div>
+              )}
+              {job.lastRun.errorMessage && (
+                <div className="mt-2 p-2 bg-red-500/10 rounded text-red-500 text-xs">
+                  {job.lastRun.errorMessage}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {job.isRunning ? (
+          <div className="space-y-3">
+            <Progress
+              value={job.runningInfo?.progress?.current || 0}
+              className="h-2"
+            />
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>{job.runningInfo?.progress?.message || 'Processing...'}</span>
+              {job.runningInfo?.startedAt && (
+                <span className="flex items-center gap-1 text-blue-500">
+                  <Timer className="h-3 w-3" />
+                  <LiveElapsedTime startedAt={job.runningInfo.startedAt} />
+                </span>
+              )}
+            </div>
+            <Button
+              onClick={onCancel}
+              disabled={isCancelling}
+              className="w-full"
+              variant="destructive"
+            >
+              {isCancelling ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Cancelling...
+                </>
+              ) : (
+                <>
+                  <Square className="h-4 w-4 mr-2" />
+                  Cancel Job
+                </>
+              )}
+            </Button>
+          </div>
+        ) : (
+          <Button
+            onClick={onRun}
+            disabled={isTriggering}
+            className="w-full"
+            variant={job.id === 'full_pipeline' ? 'default' : 'outline'}
+          >
+            {isTriggering ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Starting...
+              </>
+            ) : job.lastRun ? (
+              <>
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Rerun {job.name}
+              </>
+            ) : (
+              <>
+                <Play className="h-4 w-4 mr-2" />
+                Run {job.name}
+              </>
+            )}
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================================================================
+// PIPELINE FLOW VISUALIZATION
+// ============================================================================
+
 function PipelineFlow() {
   const { data: status, isLoading } = usePipelineStatus();
+  const { data: dataFlow } = usePipelineDataFlow();
 
   if (isLoading) {
     return (
       <div className="flex items-center gap-4 overflow-x-auto py-4">
-        {[1, 2, 3, 4, 5, 6].map((i) => (
+        {[1, 2, 3, 4].map((i) => (
           <div key={i} className="flex items-center gap-2">
-            <Skeleton className="h-24 w-40" />
-            {i < 6 && <Skeleton className="h-6 w-6" />}
+            <Skeleton className="h-32 w-48" />
+            {i < 4 && <Skeleton className="h-6 w-6" />}
           </div>
         ))}
       </div>
@@ -91,56 +410,112 @@ function PipelineFlow() {
   }
 
   const stages = status?.stages || [];
+  const current = dataFlow?.current;
+
+  // Map stage IDs to data flow counts
+  const stageCounts: Record<string, number> = {
+    extract: current?.claims || 0,
+    conflicts: current?.active_conflicts || 0,
+    derive: current?.field_links || 0,
+    score: current?.truth_metrics || 0,
+  };
 
   return (
     <div className="overflow-x-auto">
-      <div className="flex items-center gap-2 min-w-max py-4">
-        {stages.map((stage, idx) => (
-          <div key={stage.id} className="flex items-center gap-2">
-            <Card className={`w-44 transition-all ${
-              stage.lastRun?.state === 'running' ? 'ring-2 ring-blue-500 animate-pulse' :
-              stage.lastRun?.state === 'failed' ? 'ring-2 ring-red-500' :
-              stage.lastRun?.state === 'success' ? 'ring-1 ring-green-500/50' : ''
-            }`}>
-              <CardContent className="p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium text-sm">{stage.name}</span>
-                  {stage.lastRun && <StatusBadge state={stage.lastRun.state} />}
-                </div>
-                <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
-                  {stage.description}
-                </p>
-                <div className="text-xs text-muted-foreground space-y-1">
-                  {stage.lastRun ? (
-                    <>
-                      <div className="flex justify-between">
-                        <span>Last run:</span>
-                        <span>{formatRelativeTime(stage.lastRun.completedAt)}</span>
+      <div className="flex items-stretch gap-3 min-w-max py-4">
+        {stages.map((stage, idx) => {
+          const isRunning = stage.isRunning || stage.lastRun?.state === 'running';
+          const progress = stage.runningProgress || stage.lastRun?.progress;
+
+          return (
+            <div key={stage.id} className="flex items-center gap-3">
+              <Card className={`w-52 h-full transition-all ${
+                isRunning ? 'ring-2 ring-blue-500 animate-pulse' :
+                stage.lastRun?.state === 'failed' ? 'ring-2 ring-red-500' :
+                stage.lastRun?.state === 'success' ? 'border-green-500/50' : ''
+              }`}>
+                <CardContent className="p-4 h-full flex flex-col">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-semibold text-sm">{stage.name}</span>
+                    {isRunning ? (
+                      <Badge variant="secondary" className="gap-1">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        running
+                      </Badge>
+                    ) : stage.lastRun ? (
+                      <StatusBadge state={stage.lastRun.state} />
+                    ) : null}
+                  </div>
+
+                  <p className="text-xs text-muted-foreground mb-3 flex-1">
+                    {stage.description}
+                  </p>
+
+                  {/* Running progress */}
+                  {isRunning && progress && (
+                    <div className="mb-3 space-y-1">
+                      <Progress value={progress.current} className="h-2" />
+                      <div className="text-xs text-blue-600 text-center">
+                        {progress.message || `${progress.current}%`}
                       </div>
-                      {stage.lastRun.recordsSynced !== null && (
-                        <div className="flex justify-between">
-                          <span>Records:</span>
-                          <span>{stage.lastRun.recordsSynced.toLocaleString()}</span>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <span className="text-muted-foreground">Never run</span>
+                    </div>
                   )}
+
+                  {/* Data count for this stage (hide when running) */}
+                  {!isRunning && stageCounts[stage.id] !== undefined && (
+                    <div className="text-center py-2 bg-muted/50 rounded-lg mb-3">
+                      <div className="text-2xl font-bold">
+                        {stageCounts[stage.id].toLocaleString()}
+                      </div>
+                      <div className="text-xs text-muted-foreground">records</div>
+                    </div>
+                  )}
+
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    {isRunning ? (
+                      <div className="flex justify-between items-center">
+                        <span className="flex items-center gap-1">
+                          <Timer className="h-3 w-3 animate-pulse text-blue-500" />
+                          Elapsed:
+                        </span>
+                        <LiveElapsedTime startedAt={stage.lastRun?.startedAt || new Date().toISOString()} />
+                      </div>
+                    ) : stage.lastRun ? (
+                      <>
+                        <div className="flex justify-between">
+                          <span>Last run:</span>
+                          <span>{formatRelativeTime(stage.lastRun.completedAt)}</span>
+                        </div>
+                        {stage.lastRun.startedAt && stage.lastRun.completedAt && (
+                          <div className="flex justify-between">
+                            <span>Duration:</span>
+                            <span>{formatDuration((new Date(stage.lastRun.completedAt).getTime() - new Date(stage.lastRun.startedAt).getTime()) / 1000)}</span>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-muted-foreground italic">Never run</span>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+              {idx < stages.length - 1 && (
+                <div className="flex flex-col items-center justify-center">
+                  <ArrowRight className="h-6 w-6 text-muted-foreground" />
                 </div>
-              </CardContent>
-            </Card>
-            {idx < stages.length - 1 && (
-              <ArrowRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-            )}
-          </div>
-        ))}
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-// Data flow visualization
+// ============================================================================
+// DATA FLOW VISUALIZATION
+// ============================================================================
+
 function DataFlowVisualization() {
   const { data: dataFlow, isLoading } = usePipelineDataFlow();
 
@@ -152,22 +527,23 @@ function DataFlowVisualization() {
   if (!current) return null;
 
   const nodes = [
-    { id: 'sources', label: 'Sources', count: current.sources, icon: Database },
-    { id: 'documents', label: 'Documents', count: current.documents, icon: FileText },
-    { id: 'snippets', label: 'Snippets', count: current.snippets, icon: Layers },
-    { id: 'claims', label: 'Claims', count: current.claims, icon: FileText },
-    { id: 'evidence', label: 'Evidence', count: current.evidence, icon: CheckCircle },
-    { id: 'truth', label: 'Truth Metrics', count: current.truth_metrics, icon: TrendingUp },
+    { id: 'sources', label: 'Sources', count: current.sources, icon: Database, color: 'text-blue-500' },
+    { id: 'documents', label: 'Documents', count: current.documents, icon: FileText, color: 'text-green-500' },
+    { id: 'snippets', label: 'Snippets', count: current.snippets, icon: Layers, color: 'text-purple-500' },
+    { id: 'claims', label: 'Claims', count: current.claims, icon: FileText, color: 'text-orange-500' },
+    { id: 'evidence', label: 'Evidence', count: current.evidence, icon: CheckCircle, color: 'text-cyan-500' },
+    { id: 'truth', label: 'Truth Metrics', count: current.truth_metrics, icon: TrendingUp, color: 'text-yellow-500' },
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Main flow */}
       <div className="grid grid-cols-6 gap-2">
         {nodes.map((node, idx) => (
           <div key={node.id} className="relative">
-            <Card className="text-center">
+            <Card className="text-center hover:shadow-md transition-shadow">
               <CardContent className="p-4">
-                <node.icon className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                <node.icon className={`h-8 w-8 mx-auto mb-2 ${node.color}`} />
                 <div className="text-2xl font-bold">{node.count.toLocaleString()}</div>
                 <div className="text-xs text-muted-foreground">{node.label}</div>
               </CardContent>
@@ -181,28 +557,37 @@ function DataFlowVisualization() {
         ))}
       </div>
 
-      <div className="grid grid-cols-4 gap-4 mt-4">
-        <Card>
+      {/* Secondary metrics */}
+      <div className="grid grid-cols-4 gap-4">
+        <Card className={current.active_conflicts > 0 ? 'border-orange-500' : ''}>
           <CardContent className="p-4 text-center">
-            <div className="text-xl font-bold text-orange-500">{current.active_conflicts}</div>
+            <AlertTriangle className={`h-6 w-6 mx-auto mb-1 ${current.active_conflicts > 0 ? 'text-orange-500' : 'text-muted-foreground'}`} />
+            <div className={`text-xl font-bold ${current.active_conflicts > 0 ? 'text-orange-500' : ''}`}>
+              {current.active_conflicts}
+            </div>
             <div className="text-xs text-muted-foreground">Active Conflicts</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
+            <Zap className="h-6 w-6 mx-auto mb-1 text-blue-500" />
             <div className="text-xl font-bold text-blue-500">{current.entities}</div>
             <div className="text-xs text-muted-foreground">Entities</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
+            <GitBranch className="h-6 w-6 mx-auto mb-1 text-green-500" />
             <div className="text-xl font-bold text-green-500">{current.field_links}</div>
             <div className="text-xs text-muted-foreground">Field Links</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className={current.pending_reviews > 0 ? 'border-yellow-500' : ''}>
           <CardContent className="p-4 text-center">
-            <div className="text-xl font-bold text-yellow-500">{current.pending_reviews}</div>
+            <Clock className={`h-6 w-6 mx-auto mb-1 ${current.pending_reviews > 0 ? 'text-yellow-500' : 'text-muted-foreground'}`} />
+            <div className={`text-xl font-bold ${current.pending_reviews > 0 ? 'text-yellow-500' : ''}`}>
+              {current.pending_reviews}
+            </div>
             <div className="text-xs text-muted-foreground">Pending Reviews</div>
           </CardContent>
         </Card>
@@ -211,7 +596,150 @@ function DataFlowVisualization() {
   );
 }
 
-// Stats cards
+// ============================================================================
+// FEED STATUS PANEL
+// ============================================================================
+
+function FeedStatusPanel() {
+  const { data: feedsData, isLoading } = usePipelineFeedsStatus();
+
+  if (isLoading) {
+    return <Skeleton className="h-96" />;
+  }
+
+  const feeds = feedsData?.feeds || [];
+  const summary = feedsData?.summary;
+
+  return (
+    <div className="space-y-6">
+      {/* Summary cards */}
+      <div className="grid grid-cols-6 gap-4">
+        <Card>
+          <CardContent className="p-4 text-center">
+            <div className="text-2xl font-bold">{summary?.total || 0}</div>
+            <div className="text-xs text-muted-foreground">Total Feeds</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <div className="text-2xl font-bold text-green-500">{summary?.active || 0}</div>
+            <div className="text-xs text-muted-foreground">Active</div>
+          </CardContent>
+        </Card>
+        <Card className={summary?.dueForRefresh ? 'border-blue-500' : ''}>
+          <CardContent className="p-4 text-center">
+            <div className={`text-2xl font-bold ${summary?.dueForRefresh ? 'text-blue-500' : ''}`}>
+              {summary?.dueForRefresh || 0}
+            </div>
+            <div className="text-xs text-muted-foreground">Due for Refresh</div>
+          </CardContent>
+        </Card>
+        <Card className={summary?.withErrors ? 'border-red-500' : ''}>
+          <CardContent className="p-4 text-center">
+            <div className={`text-2xl font-bold ${summary?.withErrors ? 'text-red-500' : ''}`}>
+              {summary?.withErrors || 0}
+            </div>
+            <div className="text-xs text-muted-foreground">With Errors</div>
+          </CardContent>
+        </Card>
+        <Card className={summary?.neverFetched ? 'border-yellow-500' : ''}>
+          <CardContent className="p-4 text-center">
+            <div className={`text-2xl font-bold ${summary?.neverFetched ? 'text-yellow-500' : ''}`}>
+              {summary?.neverFetched || 0}
+            </div>
+            <div className="text-xs text-muted-foreground">Never Fetched</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <div className="text-2xl font-bold text-muted-foreground">{summary?.inactive || 0}</div>
+            <div className="text-xs text-muted-foreground">Inactive</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Feed list */}
+      <div className="border rounded-lg overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-muted">
+            <tr>
+              <th className="text-left p-3">Source</th>
+              <th className="text-left p-3">Feed URL</th>
+              <th className="text-left p-3">Type</th>
+              <th className="text-left p-3">Status</th>
+              <th className="text-left p-3">Last Fetched</th>
+              <th className="text-right p-3">Docs</th>
+            </tr>
+          </thead>
+          <tbody>
+            {feeds.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="p-8 text-center text-muted-foreground">
+                  No feeds configured
+                </td>
+              </tr>
+            ) : (
+              feeds.map((feed: FeedStatus) => (
+                <tr key={feed.id} className="border-t hover:bg-muted/50">
+                  <td className="p-3 font-medium">{feed.sourceName}</td>
+                  <td className="p-3">
+                    <a
+                      href={feed.feedUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-500 hover:underline text-xs max-w-xs truncate block"
+                    >
+                      {feed.feedUrl}
+                    </a>
+                  </td>
+                  <td className="p-3">
+                    <Badge variant="outline">{feed.feedType.toUpperCase()}</Badge>
+                  </td>
+                  <td className="p-3">
+                    {!feed.isActive ? (
+                      <Badge variant="secondary">Inactive</Badge>
+                    ) : feed.errorCount > 0 ? (
+                      <Badge variant="destructive" className="gap-1">
+                        <AlertCircle className="h-3 w-3" />
+                        {feed.errorCount} errors
+                      </Badge>
+                    ) : feed.isDue ? (
+                      <Badge variant="outline" className="gap-1 border-blue-500 text-blue-500">
+                        <Clock className="h-3 w-3" />
+                        Due
+                      </Badge>
+                    ) : (
+                      <Badge variant="default" className="gap-1">
+                        <CheckCircle className="h-3 w-3" />
+                        OK
+                      </Badge>
+                    )}
+                    {feed.lastError && (
+                      <div className="mt-1 text-xs text-red-500 max-w-xs truncate">
+                        {feed.lastError}
+                      </div>
+                    )}
+                  </td>
+                  <td className="p-3 text-muted-foreground">
+                    {formatRelativeTime(feed.lastFetchedAt)}
+                  </td>
+                  <td className="p-3 text-right">
+                    {feed.documentCount.toLocaleString()}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// STATS CARDS
+// ============================================================================
+
 function PipelineStatsCards() {
   const { data: stats, isLoading } = usePipelineStats();
 
@@ -290,160 +818,10 @@ function PipelineStatsCards() {
   );
 }
 
-// Sources configuration panel
-function SourcesPanel() {
-  const { data: config, isLoading: configLoading } = useSourcesConfig();
-  const { isLoading: feedsLoading } = useSourcesFeeds();
-  const [expandedSources, setExpandedSources] = useState<Set<string>>(new Set());
+// ============================================================================
+// SYNC HISTORY
+// ============================================================================
 
-  if (configLoading || feedsLoading) {
-    return <Skeleton className="h-96" />;
-  }
-
-  const sources = config?.sources || [];
-
-  const toggleExpand = (key: string) => {
-    const newExpanded = new Set(expandedSources);
-    if (newExpanded.has(key)) {
-      newExpanded.delete(key);
-    } else {
-      newExpanded.add(key);
-    }
-    setExpandedSources(newExpanded);
-  };
-
-  // Group sources by type
-  const sourcesByType: Record<string, typeof sources> = {};
-  sources.forEach((source) => {
-    if (!sourcesByType[source.sourceType]) {
-      sourcesByType[source.sourceType] = [];
-    }
-    sourcesByType[source.sourceType].push(source);
-  });
-
-  const typeLabels: Record<string, string> = {
-    government_agency: 'Government Agencies',
-    regulator: 'Regulators',
-    manufacturer: 'Manufacturers',
-    news: 'News Sources',
-    peer_reviewed: 'Research & Academic',
-    research: 'Reference',
-    wiki: 'Wiki',
-    blog: 'Blogs',
-    forum: 'Forums',
-    standards_body: 'Standards Bodies',
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold">{config?.totalSources || 0}</div>
-            <div className="text-xs text-muted-foreground">Total Sources</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-green-500">{config?.activeSources || 0}</div>
-            <div className="text-xs text-muted-foreground">Active Sources</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-blue-500">{config?.totalFeeds || 0}</div>
-            <div className="text-xs text-muted-foreground">RSS Feeds</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold">{config?.totalUrls || 0}</div>
-            <div className="text-xs text-muted-foreground">Static URLs</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="space-y-4">
-        {Object.entries(sourcesByType).map(([type, typeSources]) => (
-          <Card key={type}>
-            <CardHeader className="py-3">
-              <CardTitle className="text-sm flex items-center justify-between">
-                {typeLabels[type] || type}
-                <Badge variant="outline">{typeSources.length}</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="space-y-2">
-                {typeSources.map((source) => (
-                  <div key={source.key} className="border rounded-lg p-3">
-                    <div
-                      className="flex items-center justify-between cursor-pointer"
-                      onClick={() => toggleExpand(source.key)}
-                    >
-                      <div className="flex items-center gap-2">
-                        {expandedSources.has(source.key) ? (
-                          <ChevronDown className="h-4 w-4" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4" />
-                        )}
-                        <span className="font-medium">{source.name}</span>
-                        {!source.active && (
-                          <Badge variant="secondary">Inactive</Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-xs">
-                          Trust: {(source.baseTrust * 100).toFixed(0)}%
-                        </Badge>
-                        {source.feedCount > 0 && (
-                          <Badge variant="secondary" className="gap-1">
-                            <Rss className="h-3 w-3" />
-                            {source.feedCount}
-                          </Badge>
-                        )}
-                        {source.urlCount > 0 && (
-                          <Badge variant="outline">{source.urlCount} URLs</Badge>
-                        )}
-                      </div>
-                    </div>
-
-                    {expandedSources.has(source.key) && (
-                      <div className="mt-3 pl-6 text-sm text-muted-foreground space-y-2">
-                        {source.description && <p>{source.description}</p>}
-                        <div className="flex items-center gap-2">
-                          <a
-                            href={source.baseUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-blue-500 hover:underline"
-                          >
-                            {source.baseUrl}
-                            <ExternalLink className="h-3 w-3" />
-                          </a>
-                        </div>
-                        {source.tags && source.tags.length > 0 && (
-                          <div className="flex gap-1 flex-wrap">
-                            {source.tags.map((tag) => (
-                              <Badge key={tag} variant="outline" className="text-xs">
-                                {tag}
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// Sync history table
 function SyncHistoryTable() {
   const [filter, setFilter] = useState<{ sync_type?: string; state?: string }>({});
   const { data: historyData, isLoading } = usePipelineHistory({ ...filter, limit: 20 });
@@ -458,20 +836,21 @@ function SyncHistoryTable() {
     <div className="space-y-4">
       <div className="flex gap-2">
         <select
-          className="border rounded px-2 py-1 text-sm"
+          className="border rounded px-2 py-1 text-sm bg-background"
           value={filter.sync_type || ''}
           onChange={(e) => setFilter({ ...filter, sync_type: e.target.value || undefined })}
         >
           <option value="">All stages</option>
-          <option value="truth_ingest">Ingest</option>
           <option value="feed_ingest">Feed Ingest</option>
+          <option value="truth_ingest">Document Ingest</option>
           <option value="truth_extract">Extract</option>
           <option value="conflict_detection">Conflicts</option>
           <option value="truth_derive">Derive</option>
           <option value="truth_score">Score</option>
+          <option value="full_pipeline">Full Pipeline</option>
         </select>
         <select
-          className="border rounded px-2 py-1 text-sm"
+          className="border rounded px-2 py-1 text-sm bg-background"
           value={filter.state || ''}
           onChange={(e) => setFilter({ ...filter, state: e.target.value || undefined })}
         >
@@ -509,7 +888,7 @@ function SyncHistoryTable() {
                 return (
                   <tr key={item.id} className="border-t hover:bg-muted/50">
                     <td className="p-3">
-                      <code className="text-xs">{item.syncType}</code>
+                      <code className="text-xs bg-muted px-2 py-1 rounded">{item.syncType}</code>
                     </td>
                     <td className="p-3">
                       <StatusBadge state={item.state} />
@@ -539,17 +918,24 @@ function SyncHistoryTable() {
   );
 }
 
-// Main Pipeline page
+// ============================================================================
+// MAIN PIPELINE PAGE
+// ============================================================================
+
 export function Pipeline() {
   const { data: status } = usePipelineStatus();
+  const { data: jobsData } = usePipelineJobs();
+
+  const runningCount = jobsData?.jobs?.filter(j => j.isRunning).length || 0;
 
   return (
     <div className="space-y-8">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Pipeline</h1>
           <p className="text-muted-foreground">
-            Data ingestion and processing pipeline visualization
+            Data ingestion, processing, and truth scoring pipeline
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -564,10 +950,10 @@ export function Pipeline() {
               Issues Detected
             </Badge>
           )}
-          {status?.runningJobs && status.runningJobs.length > 0 && (
+          {runningCount > 0 && (
             <Badge variant="secondary" className="gap-1">
               <RefreshCw className="h-3 w-3 animate-spin" />
-              {status.runningJobs.length} Running
+              {runningCount} Running
             </Badge>
           )}
         </div>
@@ -590,12 +976,30 @@ export function Pipeline() {
       <PipelineStatsCards />
 
       {/* Tabs for different views */}
-      <Tabs defaultValue="dataflow">
+      <Tabs defaultValue="jobs">
         <TabsList>
+          <TabsTrigger value="jobs" className="gap-2">
+            <Play className="h-4 w-4" />
+            Run Jobs
+          </TabsTrigger>
           <TabsTrigger value="dataflow">Data Flow</TabsTrigger>
-          <TabsTrigger value="sources">Sources</TabsTrigger>
+          <TabsTrigger value="feeds">Feed Status</TabsTrigger>
           <TabsTrigger value="history">Sync History</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="jobs" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Available Jobs</CardTitle>
+              <CardDescription>
+                Click to run individual stages or the full pipeline
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <JobRunnerPanel />
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="dataflow" className="mt-4">
           <Card>
@@ -611,8 +1015,18 @@ export function Pipeline() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="sources" className="mt-4">
-          <SourcesPanel />
+        <TabsContent value="feeds" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Feed Status</CardTitle>
+              <CardDescription>
+                Status of RSS/Atom feeds with last fetch times and errors
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <FeedStatusPanel />
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="history" className="mt-4">

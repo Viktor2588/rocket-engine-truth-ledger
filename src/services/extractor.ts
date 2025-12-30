@@ -34,6 +34,10 @@ export interface ExtractConfig {
   entityTypes?: string[];
   attributeNames?: string[];
   limit?: number;
+  /** Callback to check if job was cancelled - throws if cancelled */
+  checkCancelled?: () => void;
+  /** Callback to report progress */
+  onProgress?: (current: number, total: number, message: string) => void;
 }
 
 export interface ExtractResult {
@@ -407,7 +411,14 @@ export class Extractor {
       console.log(`[Extractor] Found ${snippets.length} snippets to process`);
 
       let processedCount = 0;
+      const totalSnippets = snippets.length;
+
       for (const snippet of snippets) {
+        // Check for cancellation before processing each snippet
+        if (config.checkCancelled) {
+          config.checkCancelled();
+        }
+
         try {
           const snippetResult = await this.processSnippet(snippet);
           result.claimsCreated += snippetResult.claimsCreated;
@@ -425,8 +436,17 @@ export class Extractor {
         }
 
         processedCount++;
+
+        // Report progress every 10 snippets or at completion
+        if (processedCount % 10 === 0 || processedCount === totalSnippets) {
+          if (config.onProgress) {
+            const progressPct = Math.floor((processedCount / totalSnippets) * 100);
+            config.onProgress(progressPct, 100, `Processed ${processedCount}/${totalSnippets} snippets`);
+          }
+        }
+
         if (processedCount % 100 === 0) {
-          console.log(`[Extractor] Processed ${processedCount}/${snippets.length} snippets...`);
+          console.log(`[Extractor] Processed ${processedCount}/${totalSnippets} snippets...`);
         }
       }
 

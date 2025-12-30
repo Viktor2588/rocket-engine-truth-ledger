@@ -38,6 +38,7 @@ export interface IngestConfig {
   urls: string[];
   docType?: DocType;
   fetchTimeout?: number;
+  feedUrl?: string; // Track which feed this document came from
 }
 
 export interface IngestResult {
@@ -355,7 +356,8 @@ export class Ingestor {
             url,
             source,
             config.docType || 'other',
-            config.fetchTimeout
+            config.fetchTimeout,
+            config.feedUrl
           );
 
           if (docResult.created) {
@@ -390,10 +392,16 @@ export class Ingestor {
     url: string,
     source: Source,
     docType: DocType,
-    timeout?: number
+    timeout?: number,
+    feedUrl?: string
   ): Promise<{ created: boolean; updated: boolean; snippetsCreated: number }> {
     // Fetch the document
     const fetched = await this.fetcher.fetch(url, timeout);
+
+    // Merge feedUrl into metadata if provided
+    const metadata = feedUrl
+      ? { ...(fetched.metadata || {}), feedUrl }
+      : fetched.metadata;
 
     // Compute content hash
     const contentHash = computeContentHash(fetched.content);
@@ -445,7 +453,7 @@ export class Ingestor {
           ${contentHash},
           ${fetched.content},
           ${supersedesId},
-          ${fetched.metadata ? sql.json(fetched.metadata as postgres.JSONValue) : null}
+          ${metadata ? sql.json(metadata as postgres.JSONValue) : null}
         )
         RETURNING *
       `;
@@ -753,10 +761,26 @@ export class SourceManager {
   /**
    * Get all active feeds (for FeedFetcher)
    */
-  static async getAllActiveFeeds(): Promise<Array<SourceFeed & { sourceName: string; baseTrust: number; defaultDocType: string | null }>> {
+  static async getAllActiveFeeds(): Promise<Array<SourceFeed & { sourceName: string; sourceId: string; baseTrust: number; defaultDocType: string | null }>> {
     const sql = getConnection();
     return await sql`
-      SELECT f.*, s.name as source_name, s.base_trust, s.default_doc_type
+      SELECT
+        f.id,
+        f.source_id as "sourceId",
+        f.feed_url as "feedUrl",
+        f.feed_type as "feedType",
+        f.refresh_interval_minutes as "refreshIntervalMinutes",
+        f.max_items as "maxItems",
+        f.is_active as "isActive",
+        f.last_fetched_at as "lastFetchedAt",
+        f.last_error as "lastError",
+        f.error_count as "errorCount",
+        f.metadata,
+        f.created_at as "createdAt",
+        f.updated_at as "updatedAt",
+        s.name as "sourceName",
+        s.base_trust as "baseTrust",
+        s.default_doc_type as "defaultDocType"
       FROM truth_ledger_claude.source_feeds f
       JOIN truth_ledger_claude.sources s ON s.id = f.source_id
       WHERE f.is_active = true AND s.is_active = true

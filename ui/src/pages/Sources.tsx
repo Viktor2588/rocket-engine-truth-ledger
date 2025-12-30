@@ -48,16 +48,32 @@ import type {
   CreateSourceInput,
 } from '@/lib/types';
 
+// Source type defaults - links source type to default doc type and trust score
+const SOURCE_TYPE_DEFAULTS: Record<SourceType, { docType: DocType; trust: number; description: string }> = {
+  regulator: { docType: 'regulation', trust: 0.95, description: 'Official regulatory body (FAA, ESA)' },
+  standards_body: { docType: 'standard', trust: 0.90, description: 'Standards organization (SAE, ISO)' },
+  government_agency: { docType: 'standard_or_policy', trust: 0.85, description: 'Government agency (NASA, JAXA)' },
+  manufacturer: { docType: 'manufacturer_datasheet', trust: 0.80, description: 'Engine/component manufacturer' },
+  peer_reviewed: { docType: 'peer_reviewed_paper', trust: 0.85, description: 'Academic journals, peer review' },
+  research: { docType: 'technical_report', trust: 0.75, description: 'Research institutions, labs' },
+  news: { docType: 'news_article', trust: 0.50, description: 'News outlets, journalism' },
+  wiki: { docType: 'wiki', trust: 0.40, description: 'Wikipedia, community wikis' },
+  blog: { docType: 'blog_post', trust: 0.35, description: 'Personal/company blogs' },
+  forum: { docType: 'forum_post', trust: 0.25, description: 'Forums, discussion boards' },
+  social_media: { docType: 'social_media', trust: 0.20, description: 'Twitter, Reddit, etc.' },
+  other: { docType: 'other', trust: 0.50, description: 'Other/uncategorized' },
+};
+
 const SOURCE_TYPES: { value: SourceType; label: string }[] = [
   { value: 'regulator', label: 'Regulator' },
   { value: 'standards_body', label: 'Standards Body' },
   { value: 'government_agency', label: 'Government Agency' },
   { value: 'manufacturer', label: 'Manufacturer' },
-  { value: 'research', label: 'Research' },
   { value: 'peer_reviewed', label: 'Peer Reviewed' },
+  { value: 'research', label: 'Research' },
   { value: 'news', label: 'News' },
-  { value: 'blog', label: 'Blog' },
   { value: 'wiki', label: 'Wiki' },
+  { value: 'blog', label: 'Blog' },
   { value: 'forum', label: 'Forum' },
   { value: 'social_media', label: 'Social Media' },
   { value: 'other', label: 'Other' },
@@ -443,6 +459,22 @@ function UrlRow({ url, onDelete }: {
   );
 }
 
+// Helper to get trust color
+function getTrustColor(trust: number): string {
+  if (trust >= 0.8) return 'text-green-600 bg-green-500/10';
+  if (trust >= 0.6) return 'text-blue-600 bg-blue-500/10';
+  if (trust >= 0.4) return 'text-yellow-600 bg-yellow-500/10';
+  return 'text-red-600 bg-red-500/10';
+}
+
+function getTrustLabel(trust: number): string {
+  if (trust >= 0.9) return 'Very High';
+  if (trust >= 0.7) return 'High';
+  if (trust >= 0.5) return 'Medium';
+  if (trust >= 0.3) return 'Low';
+  return 'Very Low';
+}
+
 // Source Form Component
 function SourceForm({
   source,
@@ -455,13 +487,27 @@ function SourceForm({
   onCancel: () => void;
   isSubmitting: boolean;
 }) {
+  const isEditing = !!source;
   const [name, setName] = useState(source?.name || '');
-  const [sourceType, setSourceType] = useState<SourceType>(source?.sourceType || 'other');
+  const [sourceType, setSourceType] = useState<SourceType>(source?.sourceType || 'government_agency');
   const [baseUrl, setBaseUrl] = useState(source?.baseUrl || '');
-  const [baseTrust, setBaseTrust] = useState(source?.baseTrust ?? 0.5);
+  const [baseTrust, setBaseTrust] = useState(source?.baseTrust ?? SOURCE_TYPE_DEFAULTS['government_agency'].trust);
   const [description, setDescription] = useState(source?.description || '');
-  const [defaultDocType, setDefaultDocType] = useState<DocType | ''>(source?.defaultDocType || '');
+  const [defaultDocType, setDefaultDocType] = useState<DocType>(
+    source?.defaultDocType || SOURCE_TYPE_DEFAULTS['government_agency'].docType
+  );
   const [tags, setTags] = useState(source?.tags?.join(', ') || '');
+
+  // When source type changes, auto-fill trust and doc type (only for new sources or if user hasn't customized)
+  const handleSourceTypeChange = (newType: SourceType) => {
+    const defaults = SOURCE_TYPE_DEFAULTS[newType];
+    setSourceType(newType);
+    // Always update trust and doc type when type changes (user can still override)
+    if (!isEditing) {
+      setBaseTrust(defaults.trust);
+      setDefaultDocType(defaults.docType);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -476,6 +522,8 @@ function SourceForm({
     });
   };
 
+  const currentDefaults = SOURCE_TYPE_DEFAULTS[sourceType];
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
@@ -483,25 +531,57 @@ function SourceForm({
         <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
+          placeholder="e.g., NASA Technical Reports Server"
           required
         />
       </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium mb-1">Source Type *</label>
-          <Select value={sourceType} onValueChange={(v) => setSourceType(v as SourceType)}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {SOURCE_TYPES.map((t) => (
-                <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+
+      {/* Source Type - Main selector */}
+      <div>
+        <label className="block text-sm font-medium mb-1">Source Type *</label>
+        <Select value={sourceType} onValueChange={(v) => handleSourceTypeChange(v as SourceType)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SOURCE_TYPES.map((t) => {
+              const defaults = SOURCE_TYPE_DEFAULTS[t.value];
+              return (
+                <SelectItem key={t.value} value={t.value}>
+                  <div className="flex items-center justify-between w-full gap-4">
+                    <span>{t.label}</span>
+                    <span className={`text-xs px-1.5 py-0.5 rounded ${getTrustColor(defaults.trust)}`}>
+                      {Math.round(defaults.trust * 100)}%
+                    </span>
+                  </div>
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground mt-1">
+          {currentDefaults.description}
+        </p>
+      </div>
+
+      {/* Trust Score with visual indicator */}
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <label className="block text-sm font-medium">Trust Score *</label>
+          <Badge className={getTrustColor(baseTrust)}>
+            {getTrustLabel(baseTrust)} ({Math.round(baseTrust * 100)}%)
+          </Badge>
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">Base Trust (0-1) *</label>
+        <div className="flex items-center gap-3">
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={baseTrust}
+            onChange={(e) => setBaseTrust(parseFloat(e.target.value))}
+            className="flex-1 h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+          />
           <Input
             type="number"
             min={0}
@@ -509,10 +589,26 @@ function SourceForm({
             step={0.05}
             value={baseTrust}
             onChange={(e) => setBaseTrust(parseFloat(e.target.value) || 0.5)}
+            className="w-20"
             required
           />
         </div>
+        {baseTrust !== currentDefaults.trust && (
+          <p className="text-xs text-muted-foreground mt-1">
+            Default for {sourceType.replace('_', ' ')}: {Math.round(currentDefaults.trust * 100)}%
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="h-auto p-0 ml-2 text-xs"
+              onClick={() => setBaseTrust(currentDefaults.trust)}
+            >
+              Reset to default
+            </Button>
+          </p>
+        )}
       </div>
+
       <div>
         <label className="block text-sm font-medium mb-1">Base URL</label>
         <Input
@@ -521,25 +617,47 @@ function SourceForm({
           placeholder="https://example.com"
         />
       </div>
+
+      {/* Document Type - linked to source type */}
       <div>
-        <label className="block text-sm font-medium mb-1">Default Document Type</label>
+        <div className="flex items-center justify-between mb-1">
+          <label className="block text-sm font-medium">Default Document Type</label>
+          {defaultDocType !== currentDefaults.docType && (
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="h-auto p-0 text-xs"
+              onClick={() => setDefaultDocType(currentDefaults.docType)}
+            >
+              Reset to default
+            </Button>
+          )}
+        </div>
         <Select value={defaultDocType} onValueChange={(v) => setDefaultDocType(v as DocType)}>
           <SelectTrigger>
             <SelectValue placeholder="Select document type" />
           </SelectTrigger>
           <SelectContent>
             {DOC_TYPES.map((t) => (
-              <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+              <SelectItem key={t.value} value={t.value}>
+                {t.label}
+                {t.value === currentDefaults.docType && (
+                  <span className="text-xs text-muted-foreground ml-2">(default)</span>
+                )}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
+
       <div>
         <label className="block text-sm font-medium mb-1">Description</label>
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={2}
+          placeholder="Brief description of this source..."
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
       </div>

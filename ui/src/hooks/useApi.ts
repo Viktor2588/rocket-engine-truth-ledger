@@ -131,7 +131,7 @@ export function usePipelineStatus() {
   return useQuery({
     queryKey: queryKeys.pipelineStatus,
     queryFn: pipelineApi.getStatus,
-    refetchInterval: 10000, // Refresh every 10 seconds
+    refetchInterval: 3000, // Refresh every 3 seconds for real-time progress
   });
 }
 
@@ -167,6 +167,56 @@ export function usePipelineDataFlow() {
     queryKey: queryKeys.pipelineDataFlow,
     queryFn: pipelineApi.getDataFlow,
     refetchInterval: 30000, // Refresh every 30 seconds
+  });
+}
+
+export function usePipelineJobs() {
+  return useQuery({
+    queryKey: ['pipeline', 'jobs'] as const,
+    queryFn: pipelineApi.getJobs,
+    refetchInterval: 5000, // Refresh every 5 seconds for real-time status
+  });
+}
+
+export function usePipelineRunningJobs() {
+  return useQuery({
+    queryKey: ['pipeline', 'jobs', 'running'] as const,
+    queryFn: pipelineApi.getRunningJobs,
+    refetchInterval: 2000, // Refresh every 2 seconds when jobs are running
+  });
+}
+
+export function usePipelineFeedsStatus() {
+  return useQuery({
+    queryKey: ['pipeline', 'feeds', 'status'] as const,
+    queryFn: pipelineApi.getFeedsStatus,
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
+}
+
+export function useRunJob() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (jobId: string) => pipelineApi.runJob(jobId),
+    onSuccess: () => {
+      // Invalidate jobs queries to show running status
+      queryClient.invalidateQueries({ queryKey: ['pipeline', 'jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+    },
+  });
+}
+
+export function useCancelJob() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (jobId: string) => pipelineApi.cancelJob(jobId),
+    onSuccess: () => {
+      // Invalidate jobs queries to show cancelled status
+      queryClient.invalidateQueries({ queryKey: ['pipeline', 'jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+    },
   });
 }
 

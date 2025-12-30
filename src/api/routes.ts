@@ -7,6 +7,9 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { FactResolver } from '../services/fact-resolver.js';
 import { Scorer } from '../services/scorer.js';
 import { ConflictDetector } from '../services/conflict-detector.js';
+import { Extractor } from '../services/extractor.js';
+import { Deriver } from '../services/deriver.js';
+import { FeedFetcher } from '../services/feed-fetcher.js';
 import { SourceManager } from '../services/ingestor.js';
 import { getConnection } from '../db/connection.js';
 import {
@@ -888,48 +891,34 @@ interface PipelineStage {
   syncType: string;
 }
 
-// Pipeline stage definitions
+// Pipeline stage definitions (ingestion stages hidden - run separately if needed)
 const PIPELINE_STAGES: PipelineStage[] = [
   {
-    id: 'ingest',
-    name: 'Ingest',
-    description: 'Fetch documents from sources (HTML/PDF), compute hashes, store versions, create snippets',
-    order: 1,
-    syncType: 'truth_ingest',
-  },
-  {
-    id: 'feed_ingest',
-    name: 'Feed Ingest',
-    description: 'Automated RSS/Atom feed ingestion for continuous updates',
-    order: 2,
-    syncType: 'feed_ingest',
-  },
-  {
     id: 'extract',
-    name: 'Extract',
-    description: 'Extract claims and evidence from snippets using precision extractors',
-    order: 3,
+    name: 'Claim Extraction',
+    description: 'Extract claims and evidence from unprocessed snippets using Claude AI',
+    order: 1,
     syncType: 'truth_extract',
   },
   {
     id: 'conflicts',
     name: 'Conflict Detection',
-    description: 'Analyze conflict groups for value conflicts using tolerance thresholds',
-    order: 4,
+    description: 'Analyze conflict groups to detect value conflicts and create review items',
+    order: 2,
     syncType: 'conflict_detection',
   },
   {
     id: 'derive',
-    name: 'Derive',
-    description: 'Convert high-quality claims into domain-default buckets for field_links',
-    order: 5,
+    name: 'Derive Field Links',
+    description: 'Convert high-quality claims into domain-default buckets for entity facts',
+    order: 3,
     syncType: 'truth_derive',
   },
   {
     id: 'score',
-    name: 'Score',
-    description: 'Compute truth_raw scores with evidence weighting and independence clusters',
-    order: 6,
+    name: 'Truth Scoring',
+    description: 'Compute truth_raw scores using evidence weighting and independence clusters',
+    order: 4,
     syncType: 'truth_score',
   },
 ];
@@ -989,14 +978,59 @@ router.get('/pipeline/status', asyncHandler(async (_req, res) => {
     };
   }
 
-  // Map stages with their status
-  const stagesWithStatus = PIPELINE_STAGES.map(stage => ({
-    ...stage,
-    lastRun: statusByType[stage.syncType] || null,
-  }));
+  // Get running job info from in-memory map
+  const getRunningInfoForStage = (stageId: string) => {
+    // Check if this specific stage job is running
+    const stageJob = runningJobs.get(stageId);
+    if (stageJob?.status === 'running') {
+      return {
+        isRunning: true,
+        progress: stageJob.progress,
+        startedAt: stageJob.startedAt,
+      };
+    }
 
-  // Get any currently running jobs
-  const runningJobs = await sql<Array<{
+    // Check if full_pipeline is running and includes this stage
+    const pipelineJob = runningJobs.get('full_pipeline');
+    if (pipelineJob?.status === 'running') {
+      // Use the currentStage field we set during execution
+      const currentStage = pipelineJob.currentStage;
+
+      // If full_pipeline is running this stage, show it
+      if (currentStage === stageId) {
+        return {
+          isRunning: true,
+          progress: pipelineJob.progress,
+          startedAt: pipelineJob.startedAt,
+          asPipeline: true,
+        };
+      }
+    }
+
+    return null;
+  };
+
+  // Map stages with their status and running info
+  const stagesWithStatus = PIPELINE_STAGES.map(stage => {
+    const runningInfo = getRunningInfoForStage(stage.id);
+    const lastRun = statusByType[stage.syncType];
+
+    return {
+      ...stage,
+      lastRun: runningInfo ? {
+        ...lastRun,
+        state: 'running',
+        startedAt: runningInfo.startedAt,
+        completedAt: null,
+        progress: runningInfo.progress,
+      } : lastRun || null,
+      isRunning: !!runningInfo,
+      runningProgress: runningInfo?.progress || null,
+    };
+  });
+
+  // Get any currently running jobs from database (for display)
+  const dbRunningJobs = await sql<Array<{
     id: number;
     syncType: string;
     startedAt: Date;
@@ -1012,9 +1046,19 @@ router.get('/pipeline/status', asyncHandler(async (_req, res) => {
     ORDER BY started_at DESC
   `;
 
+  // Also include in-memory running jobs
+  const memoryRunningJobs = Array.from(runningJobs.values())
+    .filter(j => j.status === 'running')
+    .map(j => ({
+      jobId: j.jobId,
+      startedAt: j.startedAt,
+      progress: j.progress,
+    }));
+
   res.json({
     stages: stagesWithStatus,
-    runningJobs,
+    runningJobs: dbRunningJobs,
+    memoryRunningJobs,
     pipelineHealthy: stagesWithStatus.every(s => !s.lastRun || s.lastRun.state !== 'failed'),
   });
 }));
@@ -1133,10 +1177,15 @@ router.get('/pipeline/stats', asyncHandler(async (_req, res) => {
       COUNT(*) FILTER (WHERE state = 'success')::int as success_total,
       COUNT(*) FILTER (WHERE state = 'failed')::int as failed_total,
       COALESCE(SUM(records_synced), 0)::int as records_total,
-      -- Average duration
-      ROUND(AVG(EXTRACT(EPOCH FROM (completed_at - started_at)))::numeric, 2)
-        FILTER (WHERE completed_at IS NOT NULL) as avg_duration_seconds
-    FROM sync_status
+      -- Average duration (with null handling)
+      COALESCE(
+        ROUND(
+          (AVG(EXTRACT(EPOCH FROM (completed_at - started_at))) FILTER (WHERE completed_at IS NOT NULL))::numeric,
+          2
+        ),
+        0
+      ) as avg_duration_seconds
+    FROM public.sync_status
   `;
 
   // Get breakdown by sync type
@@ -1148,9 +1197,14 @@ router.get('/pipeline/stats', asyncHandler(async (_req, res) => {
       COUNT(*) FILTER (WHERE state = 'failed')::int as failed_count,
       COALESCE(SUM(records_synced), 0)::int as total_records,
       MAX(completed_at) as last_completed,
-      ROUND(AVG(EXTRACT(EPOCH FROM (completed_at - started_at)))::numeric, 2)
-        FILTER (WHERE completed_at IS NOT NULL) as avg_duration_seconds
-    FROM sync_status
+      COALESCE(
+        ROUND(
+          (AVG(EXTRACT(EPOCH FROM (completed_at - started_at))) FILTER (WHERE completed_at IS NOT NULL))::numeric,
+          2
+        ),
+        0
+      ) as avg_duration_seconds
+    FROM public.sync_status
     GROUP BY sync_type
     ORDER BY MAX(started_at) DESC
   `;
@@ -1158,6 +1212,634 @@ router.get('/pipeline/stats', asyncHandler(async (_req, res) => {
   res.json({
     summary: stats[0],
     byStage: breakdown,
+  });
+}));
+
+// ============================================================================
+// JOB EXECUTION ENDPOINTS
+// ============================================================================
+
+// Track running jobs in memory (in production, use Redis or similar)
+const runningJobs = new Map<string, {
+  jobId: string;
+  jobType: string;
+  startedAt: Date;
+  status: 'running' | 'completed' | 'failed' | 'cancelled';
+  progress?: { current: number; total: number; message: string };
+  currentStage?: string; // For full_pipeline: which stage is currently running
+  result?: unknown;
+  error?: string;
+  abortController?: AbortController;
+}>();
+
+// Helper to check if job was cancelled
+function isJobCancelled(jobId: string): boolean {
+  const job = runningJobs.get(jobId);
+  return job?.status === 'cancelled' || job?.abortController?.signal.aborted === true;
+}
+
+// Job timeout configuration (2 hours default)
+const JOB_TIMEOUT_HOURS = 2;
+
+/**
+ * Clean up stuck jobs that have been running longer than the timeout threshold.
+ * This handles cases where:
+ * - Server restarted while jobs were running
+ * - Jobs hung indefinitely
+ * - Network issues caused jobs to stall
+ */
+async function cleanupStuckJobs(): Promise<{ cleaned: number; jobs: string[] }> {
+  const sql = getConnection();
+
+  const result = await sql`
+    UPDATE sync_status
+    SET
+      state = 'timeout',
+      completed_at = NOW(),
+      error_message = ${'Job timed out after ' + JOB_TIMEOUT_HOURS + ' hours of running'}
+    WHERE state = 'running'
+      AND started_at < NOW() - INTERVAL '${sql.unsafe(String(JOB_TIMEOUT_HOURS))} hours'
+    RETURNING sync_type, started_at
+  `;
+
+  const cleanedJobs = result.map(r => r.sync_type as string);
+
+  if (cleanedJobs.length > 0) {
+    console.log(`[Job Cleanup] Marked ${cleanedJobs.length} stuck jobs as timed out:`, cleanedJobs);
+  }
+
+  return { cleaned: cleanedJobs.length, jobs: cleanedJobs };
+}
+
+// Run cleanup on startup and every 30 minutes
+let cleanupInitialized = false;
+function initializeJobCleanup() {
+  if (cleanupInitialized) return;
+  cleanupInitialized = true;
+
+  // Run immediately on startup
+  cleanupStuckJobs().catch(err => {
+    console.error('[Job Cleanup] Error during initial cleanup:', err);
+  });
+
+  // Run every 30 minutes
+  setInterval(() => {
+    cleanupStuckJobs().catch(err => {
+      console.error('[Job Cleanup] Error during scheduled cleanup:', err);
+    });
+  }, 30 * 60 * 1000);
+
+  console.log(`[Job Cleanup] Initialized with ${JOB_TIMEOUT_HOURS}h timeout threshold`);
+}
+
+// Job definitions with full metadata
+const JOB_DEFINITIONS = [
+  {
+    id: 'feed_ingest',
+    name: 'Feed Ingest',
+    description: 'Fetch and ingest content from all active RSS/Atom feeds',
+    category: 'ingestion',
+    estimatedDuration: '2-10 minutes',
+    affects: ['documents', 'snippets'],
+  },
+  {
+    id: 'extract',
+    name: 'Claim Extraction',
+    description: 'Extract claims and evidence from unprocessed snippets using Claude AI',
+    category: 'processing',
+    estimatedDuration: '5-30 minutes',
+    affects: ['claims', 'evidence', 'conflict_groups'],
+  },
+  {
+    id: 'conflicts',
+    name: 'Conflict Detection',
+    description: 'Analyze conflict groups to detect value conflicts and create review items',
+    category: 'processing',
+    estimatedDuration: '1-5 minutes',
+    affects: ['conflict_groups', 'review_queue'],
+  },
+  {
+    id: 'derive',
+    name: 'Derive Field Links',
+    description: 'Convert high-quality claims into domain-default buckets for entity facts',
+    category: 'processing',
+    estimatedDuration: '1-3 minutes',
+    affects: ['field_links'],
+  },
+  {
+    id: 'score',
+    name: 'Truth Scoring',
+    description: 'Compute truth_raw scores using evidence weighting and independence clusters',
+    category: 'scoring',
+    estimatedDuration: '2-5 minutes',
+    affects: ['truth_metrics'],
+  },
+  {
+    id: 'full_pipeline',
+    name: 'Full Pipeline',
+    description: 'Run all processing stages: extract → conflicts → derive → score',
+    category: 'orchestration',
+    estimatedDuration: '5-40 minutes',
+    affects: ['claims', 'evidence', 'conflict_groups', 'field_links', 'truth_metrics'],
+  },
+];
+
+// Initialize job cleanup on module load
+initializeJobCleanup();
+
+/**
+ * POST /pipeline/jobs/cleanup
+ * Manually trigger cleanup of stuck jobs (admin action)
+ */
+router.post('/pipeline/jobs/cleanup', asyncHandler(async (_req, res) => {
+  const result = await cleanupStuckJobs();
+  res.json({
+    message: result.cleaned > 0
+      ? `Cleaned up ${result.cleaned} stuck job(s)`
+      : 'No stuck jobs found',
+    cleaned: result.cleaned,
+    jobs: result.jobs,
+    timeoutThreshold: `${JOB_TIMEOUT_HOURS} hours`,
+  });
+}));
+
+/**
+ * GET /pipeline/jobs
+ * Get all available jobs with their descriptions and status
+ */
+router.get('/pipeline/jobs', asyncHandler(async (_req, res) => {
+  const sql = getConnection();
+
+  // Get last run info for each job type
+  const lastRuns = await sql`
+    SELECT DISTINCT ON (sync_type)
+      sync_type as "syncType",
+      state,
+      started_at as "startedAt",
+      completed_at as "completedAt",
+      records_synced as "recordsSynced",
+      error_message as "errorMessage"
+    FROM sync_status
+    ORDER BY sync_type, started_at DESC
+  `;
+
+  const lastRunMap = new Map(lastRuns.map(r => [r.syncType, r]));
+
+  const jobs = JOB_DEFINITIONS.map(job => {
+    const syncType = job.id === 'full_pipeline' ? 'truth_score' :
+                     job.id === 'feed_ingest' ? 'feed_ingest' :
+                     job.id === 'conflicts' ? 'conflict_detection' :
+                     `truth_${job.id}`;
+    const lastRun = lastRunMap.get(syncType);
+    const running = runningJobs.get(job.id);
+
+    return {
+      ...job,
+      syncType,
+      isRunning: running?.status === 'running',
+      runningInfo: running?.status === 'running' ? {
+        startedAt: running.startedAt,
+        progress: running.progress,
+      } : null,
+      lastRun: lastRun ? {
+        state: lastRun.state,
+        startedAt: lastRun.startedAt,
+        completedAt: lastRun.completedAt,
+        recordsSynced: lastRun.recordsSynced,
+        errorMessage: lastRun.errorMessage,
+      } : null,
+    };
+  });
+
+  res.json({ jobs });
+}));
+
+/**
+ * GET /pipeline/jobs/running
+ * Get currently running jobs
+ */
+router.get('/pipeline/jobs/running', asyncHandler(async (_req, res) => {
+  const running = Array.from(runningJobs.values())
+    .filter(j => j.status === 'running')
+    .map(j => ({
+      jobId: j.jobId,
+      jobType: j.jobType,
+      startedAt: j.startedAt,
+      progress: j.progress,
+    }));
+
+  res.json({ running, count: running.length });
+}));
+
+/**
+ * POST /pipeline/jobs/:jobId/run
+ * Execute a job
+ */
+router.post('/pipeline/jobs/:jobId/run', asyncHandler(async (req, res) => {
+  const { jobId } = req.params;
+  const sql = getConnection();
+
+  // Validate job exists
+  const jobDef = JOB_DEFINITIONS.find(j => j.id === jobId);
+  if (!jobDef) {
+    res.status(404).json({ error: `Job '${jobId}' not found` });
+    return;
+  }
+
+  // Check if already running (in-memory)
+  const existing = runningJobs.get(jobId);
+  if (existing?.status === 'running') {
+    res.status(409).json({
+      error: 'Job is already running',
+      startedAt: existing.startedAt,
+    });
+    return;
+  }
+
+  // Also check database for running jobs (handles server restart case)
+  const syncType = jobId === 'full_pipeline' ? 'full_pipeline' :
+                   jobId === 'feed_ingest' ? 'feed_ingest' :
+                   jobId === 'conflicts' ? 'conflict_detection' :
+                   `truth_${jobId}`;
+
+  const dbRunning = await sql`
+    SELECT id, started_at as "startedAt"
+    FROM sync_status
+    WHERE sync_type = ${syncType} AND state = 'running'
+    ORDER BY started_at DESC
+    LIMIT 1
+  `;
+
+  if (dbRunning.length > 0) {
+    res.status(409).json({
+      error: 'Job is already running (check database)',
+      startedAt: dbRunning[0].startedAt,
+      hint: 'If this job is stuck, use POST /pipeline/jobs/cleanup to clear it',
+    });
+    return;
+  }
+
+  // Create run ID and track start
+  const runId = crypto.randomUUID();
+  const startedAt = new Date();
+  const abortController = new AbortController();
+
+  runningJobs.set(jobId, {
+    jobId: runId,
+    jobType: jobId,
+    startedAt,
+    status: 'running',
+    progress: { current: 0, total: 100, message: 'Starting...' },
+    abortController,
+  });
+
+  // Record in sync_status (syncType already defined above)
+  await sql`
+    INSERT INTO sync_status (sync_type, state, started_at, metadata)
+    VALUES (${syncType}, 'running', ${startedAt}, ${JSON.stringify({ runId, triggeredBy: 'api' })}::jsonb)
+  `;
+
+  // Return immediately - job runs in background
+  res.json({
+    runId,
+    jobId,
+    jobType: jobDef.name,
+    status: 'started',
+    startedAt,
+    message: `Job '${jobDef.name}' started`,
+  });
+
+  // Execute job asynchronously
+  executeJob(jobId, runId, sql).catch(err => {
+    console.error(`Job ${jobId} failed:`, err);
+  });
+}));
+
+/**
+ * POST /pipeline/jobs/:jobId/cancel
+ * Cancel a running job
+ */
+router.post('/pipeline/jobs/:jobId/cancel', asyncHandler(async (req, res) => {
+  const { jobId } = req.params;
+  const sql = getConnection();
+
+  const job = runningJobs.get(jobId);
+  if (!job) {
+    res.status(404).json({ error: `No job '${jobId}' found` });
+    return;
+  }
+
+  if (job.status !== 'running') {
+    res.status(400).json({
+      error: `Job is not running (current status: ${job.status})`,
+      status: job.status,
+    });
+    return;
+  }
+
+  // Trigger cancellation
+  job.status = 'cancelled';
+  job.abortController?.abort();
+  job.progress = { current: 0, total: 100, message: 'Cancelling...' };
+
+  // Update sync_status
+  const syncType = jobId === 'full_pipeline' ? 'full_pipeline' :
+                   jobId === 'feed_ingest' ? 'feed_ingest' :
+                   jobId === 'conflicts' ? 'conflict_detection' :
+                   `truth_${jobId}`;
+
+  await sql`
+    UPDATE sync_status
+    SET state = 'cancelled',
+        completed_at = NOW(),
+        error_message = 'Cancelled by user'
+    WHERE sync_type = ${syncType}
+      AND state = 'running'
+  `;
+
+  res.json({
+    jobId,
+    status: 'cancelled',
+    message: `Job '${jobId}' has been cancelled`,
+  });
+}));
+
+/**
+ * Execute a job (runs in background)
+ */
+async function executeJob(jobId: string, runId: string, sql: ReturnType<typeof getConnection>, parentJobId?: string) {
+  const log = (message: string) => {
+    console.log(`[Job ${jobId}:${runId}] ${new Date().toISOString()} - ${message}`);
+  };
+
+  const updateProgress = (current: number, total: number, message: string) => {
+    log(`Progress: ${current}/${total} - ${message}`);
+    // Update own entry if exists, or parent's entry if running as sub-stage
+    const targetJobId = runningJobs.has(jobId) ? jobId : parentJobId;
+    if (targetJobId) {
+      const job = runningJobs.get(targetJobId);
+      if (job && job.status === 'running') {
+        job.progress = { current, total, message };
+      }
+    }
+  };
+
+  // Check if cancelled before starting (check both own job and parent if exists)
+  const checkCancelled = () => {
+    if (isJobCancelled(jobId) || (parentJobId && isJobCancelled(parentJobId))) {
+      log('Job cancelled by user');
+      throw new Error('Job was cancelled');
+    }
+  };
+
+  const syncType = jobId === 'full_pipeline' ? 'full_pipeline' :
+                   jobId === 'feed_ingest' ? 'feed_ingest' :
+                   jobId === 'conflicts' ? 'conflict_detection' :
+                   `truth_${jobId}`;
+
+  log(`Starting job execution (syncType: ${syncType})`);
+
+  try {
+    checkCancelled();
+    let recordsSynced = 0;
+
+    switch (jobId) {
+      case 'feed_ingest': {
+        updateProgress(10, 100, 'Fetching feeds from database...');
+        const fetcher = new FeedFetcher();
+        updateProgress(30, 100, 'Ingesting feed content...');
+        log('Starting feed ingestion...');
+        const result = await fetcher.ingestAllFeedsFromDb();
+        recordsSynced = result.totalDocumentsCreated + result.totalSnippetsCreated;
+        log(`Feed ingestion complete: ${recordsSynced} records`);
+        updateProgress(100, 100, `Ingested ${recordsSynced} records`);
+        break;
+      }
+
+      case 'extract': {
+        updateProgress(10, 100, 'Finding unprocessed snippets...');
+        const extractor = new Extractor();
+        log('Starting claim extraction...');
+        const result = await extractor.extract({
+          checkCancelled,
+          onProgress: (current, total, message) => {
+            // Scale progress from 10-100 (10% for init)
+            const scaledProgress = 10 + Math.floor((current / total) * 90);
+            updateProgress(scaledProgress, 100, message);
+          },
+        });
+        recordsSynced = result.claimsCreated + result.evidenceCreated;
+        log(`Extraction complete: ${result.claimsCreated} claims, ${result.evidenceCreated} evidence`);
+        updateProgress(100, 100, `Extracted ${result.claimsCreated} claims, ${result.evidenceCreated} evidence`);
+        break;
+      }
+
+      case 'conflicts': {
+        updateProgress(10, 100, 'Analyzing conflict groups...');
+        const detector = new ConflictDetector();
+        log('Starting conflict detection...');
+        const result = await detector.detectConflicts({
+          checkCancelled,
+          onProgress: (current, total, message) => {
+            const scaledProgress = 10 + Math.floor((current / total) * 90);
+            updateProgress(scaledProgress, 100, message);
+          },
+        });
+        recordsSynced = result.groupsAnalyzed;
+        log(`Conflict detection complete: ${result.groupsAnalyzed} groups, ${result.conflictsFound} conflicts`);
+        updateProgress(100, 100, `Analyzed ${result.groupsAnalyzed} groups, found ${result.conflictsFound} conflicts`);
+        break;
+      }
+
+      case 'derive': {
+        updateProgress(10, 100, 'Finding high-quality claims...');
+        const deriver = new Deriver();
+        log('Starting derivation...');
+        const result = await deriver.derive({
+          checkCancelled,
+          onProgress: (current, total, message) => {
+            const scaledProgress = 10 + Math.floor((current / total) * 90);
+            updateProgress(scaledProgress, 100, message);
+          },
+        });
+        recordsSynced = result.derivedClaimsCreated + result.fieldLinksCreated;
+        log(`Derivation complete: ${result.fieldLinksCreated} field links`);
+        updateProgress(100, 100, `Created ${result.fieldLinksCreated} field links`);
+        break;
+      }
+
+      case 'score': {
+        updateProgress(10, 100, 'Computing truth metrics...');
+        const scorer = new Scorer();
+        log('Starting scoring...');
+        const result = await scorer.score({
+          checkCancelled,
+          onProgress: (current, total, message) => {
+            const scaledProgress = 10 + Math.floor((current / total) * 90);
+            updateProgress(scaledProgress, 100, message);
+          },
+        });
+        recordsSynced = result.metricsCreated + result.metricsUpdated;
+        log(`Scoring complete: ${result.claimsScored} claims`);
+        updateProgress(100, 100, `Scored ${result.claimsScored} claims`);
+        break;
+      }
+
+      case 'full_pipeline': {
+        // Run all processing stages sequentially (feed_ingest excluded - run separately if needed)
+        const stages = ['extract', 'conflicts', 'derive', 'score'];
+        log(`Starting full pipeline with ${stages.length} stages: ${stages.join(', ')}`);
+
+        // Helper to update current stage
+        const setCurrentStage = (stage: string | undefined) => {
+          const pipelineJob = runningJobs.get('full_pipeline');
+          if (pipelineJob) {
+            pipelineJob.currentStage = stage;
+          }
+        };
+
+        for (let i = 0; i < stages.length; i++) {
+          checkCancelled(); // Check before each stage
+          const stage = stages[i];
+          const progress = Math.floor((i / stages.length) * 100);
+
+          // Set the current stage so status endpoint can detect it
+          setCurrentStage(stage);
+          updateProgress(progress, 100, `Running ${stage}...`);
+          log(`Starting stage ${i + 1}/${stages.length}: ${stage}`);
+
+          // Execute each stage (reuse the switch logic), passing 'full_pipeline' as parent
+          try {
+            await executeJob(stage, `${runId}-${stage}`, sql, 'full_pipeline');
+            log(`Completed stage ${i + 1}/${stages.length}: ${stage}`);
+          } catch (stageError) {
+            log(`Stage ${stage} failed: ${stageError instanceof Error ? stageError.message : String(stageError)}`);
+            throw stageError; // Re-throw to fail the whole pipeline
+          }
+          checkCancelled(); // Check after each stage
+        }
+        setCurrentStage(undefined); // Clear when done
+        log('Full pipeline completed successfully');
+        updateProgress(100, 100, 'Full pipeline completed');
+        break;
+      }
+    }
+
+    // Mark as completed
+    log(`Job completed successfully with ${recordsSynced} records synced`);
+    const job = runningJobs.get(jobId);
+    if (job) {
+      job.status = 'completed';
+      job.result = { recordsSynced };
+    }
+
+    await sql`
+      UPDATE sync_status
+      SET state = 'success', completed_at = NOW(), records_synced = ${recordsSynced}
+      WHERE sync_type = ${syncType} AND state = 'running'
+      ORDER BY started_at DESC
+      LIMIT 1
+    `;
+    log('Database sync_status updated to success');
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const wasCancelled = errorMessage === 'Job was cancelled' || isJobCancelled(jobId);
+
+    log(`Job ${wasCancelled ? 'cancelled' : 'failed'}: ${errorMessage}`);
+
+    const job = runningJobs.get(jobId);
+    if (job) {
+      job.status = wasCancelled ? 'cancelled' : 'failed';
+      job.error = errorMessage;
+    }
+
+    // Only update if not already cancelled (cancel endpoint handles that)
+    if (!wasCancelled) {
+      await sql`
+        UPDATE sync_status
+        SET state = 'failed', completed_at = NOW(), error_message = ${errorMessage}
+        WHERE id = (
+          SELECT id FROM sync_status
+          WHERE sync_type = ${syncType} AND state = 'running'
+          ORDER BY started_at DESC
+          LIMIT 1
+        )
+      `;
+      log('Database sync_status updated to failed');
+    }
+  } finally {
+    log('Job execution finished, scheduling cleanup');
+    // Clean up after a delay
+    setTimeout(() => {
+      const job = runningJobs.get(jobId);
+      if (job && job.status !== 'running') {
+        runningJobs.delete(jobId);
+        console.log(`[Job ${jobId}] Removed from memory after cleanup delay`);
+      }
+    }, 60000); // Keep for 1 minute after completion
+  }
+}
+
+/**
+ * GET /pipeline/feeds/status
+ * Get status of all feeds with last fetch times and errors
+ */
+router.get('/pipeline/feeds/status', asyncHandler(async (_req, res) => {
+  const sql = getConnection();
+
+  const feeds = await sql`
+    SELECT
+      sf.id,
+      sf.source_id as "sourceId",
+      s.name as "sourceName",
+      sf.feed_url as "feedUrl",
+      sf.feed_type as "feedType",
+      sf.refresh_interval_minutes as "refreshIntervalMinutes",
+      sf.is_active as "isActive",
+      sf.last_fetched_at as "lastFetchedAt",
+      sf.last_error as "lastError",
+      sf.error_count as "errorCount",
+      sf.created_at as "createdAt",
+      -- Calculate if due for refresh
+      CASE
+        WHEN sf.last_fetched_at IS NULL THEN true
+        WHEN sf.last_fetched_at + (sf.refresh_interval_minutes || ' minutes')::interval < NOW() THEN true
+        ELSE false
+      END as "isDue",
+      -- Calculate next fetch time
+      CASE
+        WHEN sf.last_fetched_at IS NULL THEN NOW()
+        ELSE sf.last_fetched_at + (sf.refresh_interval_minutes || ' minutes')::interval
+      END as "nextFetchAt",
+      -- Get document count from this feed
+      (SELECT COUNT(*)::int FROM truth_ledger_claude.documents d
+       WHERE d.source_id = sf.source_id
+       AND d.metadata->>'feedUrl' = sf.feed_url) as "documentCount"
+    FROM truth_ledger_claude.source_feeds sf
+    JOIN truth_ledger_claude.sources s ON s.id = sf.source_id
+    ORDER BY
+      sf.is_active DESC,
+      sf.error_count DESC,
+      sf.last_fetched_at ASC NULLS FIRST
+  `;
+
+  // Calculate summary stats
+  const activeCount = feeds.filter(f => f.isActive).length;
+  const dueCount = feeds.filter(f => f.isActive && f.isDue).length;
+  const errorCount = feeds.filter(f => f.errorCount > 0).length;
+  const neverFetched = feeds.filter(f => !f.lastFetchedAt).length;
+
+  res.json({
+    feeds,
+    summary: {
+      total: feeds.length,
+      active: activeCount,
+      inactive: feeds.length - activeCount,
+      dueForRefresh: dueCount,
+      withErrors: errorCount,
+      neverFetched,
+    },
   });
 }));
 

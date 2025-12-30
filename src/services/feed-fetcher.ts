@@ -342,6 +342,7 @@ export class FeedFetcher {
             urls,
             docType: sourceConfig.defaultDocType,
             fetchTimeout: 30000,
+            feedUrl: feed.url,
           });
 
           result.documentsCreated = ingestResult.documentsCreated;
@@ -399,6 +400,7 @@ export class FeedFetcher {
           sourceId: feed.sourceId,
           urls,
           docType: undefined, // Will use source default
+          feedUrl: feed.feedUrl,
         });
 
         result.documentsCreated = ingestResult.documentsCreated;

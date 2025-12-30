@@ -284,12 +284,20 @@ export const reviewApi = {
 };
 
 // Pipeline API
+export interface JobProgress {
+  current: number;
+  total: number;
+  message?: string;
+}
+
 export interface PipelineStage {
   id: string;
   name: string;
   description: string;
   order: number;
   syncType: string;
+  isRunning?: boolean;
+  runningProgress?: JobProgress | null;
   lastRun?: {
     syncType: string;
     state: string;
@@ -297,6 +305,7 @@ export interface PipelineStage {
     completedAt: string | null;
     recordsSynced: number | null;
     errorMessage: string | null;
+    progress?: JobProgress | null;
   } | null;
 }
 
@@ -412,6 +421,64 @@ export interface SourcesFeeds {
   }>;
 }
 
+// Job types
+export interface PipelineJob {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  estimatedDuration: string;
+  affects: string[];
+  syncType: string;
+  isRunning: boolean;
+  runningInfo: {
+    startedAt: string;
+    progress: { current: number; total: number; message: string };
+  } | null;
+  lastRun: {
+    state: string;
+    startedAt: string;
+    completedAt: string | null;
+    recordsSynced: number | null;
+    errorMessage: string | null;
+  } | null;
+}
+
+export interface FeedStatus {
+  id: string;
+  sourceId: string;
+  sourceName: string;
+  feedUrl: string;
+  feedType: string;
+  refreshIntervalMinutes: number;
+  isActive: boolean;
+  lastFetchedAt: string | null;
+  lastError: string | null;
+  errorCount: number;
+  createdAt: string;
+  isDue: boolean;
+  nextFetchAt: string;
+  documentCount: number;
+}
+
+export interface FeedStatusSummary {
+  total: number;
+  active: number;
+  inactive: number;
+  dueForRefresh: number;
+  withErrors: number;
+  neverFetched: number;
+}
+
+export interface JobRunResult {
+  runId: string;
+  jobId: string;
+  jobType: string;
+  status: string;
+  startedAt: string;
+  message: string;
+}
+
 export const pipelineApi = {
   getStatus: async (): Promise<PipelineStatus> => {
     const response = await api.get('/pipeline/status');
@@ -441,6 +508,33 @@ export const pipelineApi = {
 
   getDataFlow: async (): Promise<DataFlow> => {
     const response = await api.get('/pipeline/data-flow');
+    return response.data;
+  },
+
+  // Job management
+  getJobs: async (): Promise<{ jobs: PipelineJob[] }> => {
+    const response = await api.get('/pipeline/jobs');
+    return response.data;
+  },
+
+  getRunningJobs: async (): Promise<{ running: Array<{ jobId: string; jobType: string; startedAt: string; progress: { current: number; total: number; message: string } }>; count: number }> => {
+    const response = await api.get('/pipeline/jobs/running');
+    return response.data;
+  },
+
+  runJob: async (jobId: string): Promise<JobRunResult> => {
+    const response = await api.post(`/pipeline/jobs/${jobId}/run`);
+    return response.data;
+  },
+
+  cancelJob: async (jobId: string): Promise<{ jobId: string; status: string; message: string }> => {
+    const response = await api.post(`/pipeline/jobs/${jobId}/cancel`);
+    return response.data;
+  },
+
+  // Feed status
+  getFeedsStatus: async (): Promise<{ feeds: FeedStatus[]; summary: FeedStatusSummary }> => {
+    const response = await api.get('/pipeline/feeds/status');
     return response.data;
   },
 };

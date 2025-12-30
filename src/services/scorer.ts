@@ -41,6 +41,10 @@ export interface ScorerConfig {
   entityIds?: string[];
   forceRescore?: boolean;
   limit?: number;
+  /** Callback to check if job was cancelled - throws if cancelled */
+  checkCancelled?: () => void;
+  /** Callback to report progress */
+  onProgress?: (current: number, total: number, message: string) => void;
 }
 
 export interface ScorerResult {
@@ -100,8 +104,15 @@ export class Scorer {
 
     try {
       const claims = await this.getClaimsToScore(config);
+      const totalClaims = claims.length;
 
-      for (const claim of claims) {
+      for (let i = 0; i < claims.length; i++) {
+        // Check for cancellation before processing each claim
+        if (config.checkCancelled) {
+          config.checkCancelled();
+        }
+
+        const claim = claims[i];
         try {
           const scoreResult = await this.scoreClaim(claim);
           result.claimsScored++;
@@ -115,6 +126,14 @@ export class Scorer {
             claimId: claim.id,
             error: error instanceof Error ? error.message : String(error),
           });
+        }
+
+        // Report progress every 20 claims or at completion
+        if ((i + 1) % 20 === 0 || i === totalClaims - 1) {
+          if (config.onProgress) {
+            const progressPct = Math.floor(((i + 1) / totalClaims) * 100);
+            config.onProgress(progressPct, 100, `Scored ${i + 1}/${totalClaims} claims`);
+          }
         }
       }
 

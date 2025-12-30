@@ -29,6 +29,10 @@ export interface ConflictDetectionConfig {
   entityIds?: string[];
   forceRecheck?: boolean;
   limit?: number;
+  /** Callback to check if job was cancelled - throws if cancelled */
+  checkCancelled?: () => void;
+  /** Callback to report progress */
+  onProgress?: (current: number, total: number, message: string) => void;
 }
 
 export interface ConflictDetectionResult {
@@ -84,8 +88,15 @@ export class ConflictDetector {
 
     try {
       const groups = await this.getGroupsToAnalyze(config);
+      const totalGroups = groups.length;
 
-      for (const group of groups) {
+      for (let i = 0; i < groups.length; i++) {
+        // Check for cancellation before processing each group
+        if (config.checkCancelled) {
+          config.checkCancelled();
+        }
+
+        const group = groups[i];
         try {
           const analysis = await this.analyzeGroup(group);
           await this.applyAnalysis(analysis);
@@ -110,6 +121,14 @@ export class ConflictDetector {
             groupId: group.id,
             error: error instanceof Error ? error.message : String(error),
           });
+        }
+
+        // Report progress every 10 groups or at completion
+        if ((i + 1) % 10 === 0 || i === totalGroups - 1) {
+          if (config.onProgress) {
+            const progressPct = Math.floor(((i + 1) / totalGroups) * 100);
+            config.onProgress(progressPct, 100, `Analyzed ${i + 1}/${totalGroups} groups`);
+          }
         }
       }
 
