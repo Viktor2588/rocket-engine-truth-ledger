@@ -223,7 +223,8 @@ export const conflictApi = {
         offset: filters?.offset,
       },
     });
-    const conflicts = response.data as unknown[];
+    const data = response.data as { conflictGroups?: unknown[]; conflict_groups?: unknown[] };
+    const conflicts = (data.conflictGroups || data.conflict_groups || []) as unknown[];
     return conflicts.map((c: unknown) => {
       const raw = c as Record<string, unknown>;
       return {
@@ -295,7 +296,8 @@ export const conflictApi = {
 export const reviewApi = {
   list: async (filters?: ReviewQueueFilters): Promise<ReviewQueueItem[]> => {
     const response = await api.get('/review-queue', { params: filters });
-    const items = response.data as unknown[];
+    const data = response.data as { items?: unknown[] };
+    const items = (data.items || []) as unknown[];
     return items.map((item: unknown) => {
       const raw = item as Record<string, unknown>;
       return {
