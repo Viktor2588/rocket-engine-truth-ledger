@@ -333,7 +333,8 @@ export const reviewApi = {
 
   get: async (id: string): Promise<ReviewQueueItem> => {
     const response = await api.get(`/review-queue/${id}`);
-    const raw = response.data as Record<string, unknown>;
+    const data = response.data as { item?: Record<string, unknown> };
+    const raw = (data.item || response.data) as Record<string, unknown>;
     return {
       id: raw.id as string,
       itemType: (raw.itemType || raw.item_type) as string,
