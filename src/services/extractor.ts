@@ -584,10 +584,11 @@ export class Extractor {
 
   /**
    * Get snippets that need processing
+   * Uses round-robin across sources to ensure all sources get processed
    */
   private async getSnippetsToProcess(config: ExtractConfig): Promise<Snippet[]> {
     const sql = getConnection();
-    const limit = config.limit || 1000;
+    const limit = config.limit || 5000;  // Increased default limit
 
     if (config.documentIds && config.documentIds.length > 0) {
       return await sql<Snippet[]>`
@@ -600,12 +601,31 @@ export class Extractor {
     }
 
     // Get snippets that haven't been processed yet
+    // Use round-robin across sources to ensure fair distribution
+    // This query assigns row numbers within each source, then orders by row number
+    // so we get snippet 1 from each source, then snippet 2 from each source, etc.
     return await sql<Snippet[]>`
-      SELECT s.*
-      FROM truth_ledger_claude.snippets s
-      LEFT JOIN truth_ledger_claude.evidence e ON e.snippet_id = s.id
-      WHERE e.id IS NULL
-      ORDER BY s.created_at ASC
+      WITH ranked_snippets AS (
+        SELECT
+          s.id,
+          s.document_id,
+          s.locator,
+          s.text,
+          s.snippet_hash,
+          s.snippet_type,
+          s.metadata,
+          s.created_at,
+          d.source_id,
+          ROW_NUMBER() OVER (PARTITION BY d.source_id ORDER BY RANDOM()) as source_rank
+        FROM truth_ledger_claude.snippets s
+        JOIN truth_ledger_claude.documents d ON s.document_id = d.id
+        LEFT JOIN truth_ledger_claude.evidence e ON e.snippet_id = s.id
+        WHERE e.id IS NULL
+      )
+      SELECT
+        id, document_id, locator, text, snippet_hash, snippet_type, metadata, created_at
+      FROM ranked_snippets
+      ORDER BY source_rank, RANDOM()
       LIMIT ${limit}
     `;
   }
