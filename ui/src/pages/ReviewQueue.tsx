@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,7 +13,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatCard } from '@/components/shared/StatCard';
 import { useReviewQueue, useReviewQueueStats, useUpdateReviewItem } from '@/hooks/useApi';
-import { ClipboardList, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { ClipboardList, Clock, CheckCircle, XCircle, AlertCircle, AlertTriangle, ExternalLink } from 'lucide-react';
 import { formatDate, cn } from '@/lib/utils';
 import type { ReviewQueueItem } from '@/lib/types';
 
@@ -25,6 +26,48 @@ const statusConfig: Record<
   resolved: { label: 'Resolved', variant: 'outline', icon: CheckCircle },
   dismissed: { label: 'Dismissed', variant: 'destructive', icon: XCircle },
 };
+
+interface ConflictNotes {
+  valueGroups?: number;
+  uniqueValues?: number[];
+  evidenceAnalysis?: {
+    clearWinner: boolean;
+    evidenceCounts: number[];
+  };
+}
+
+function parseNotes(notes: string | null): ConflictNotes | null {
+  if (!notes) return null;
+  try {
+    return JSON.parse(notes);
+  } catch {
+    return null;
+  }
+}
+
+function getConflictSeverity(notes: ConflictNotes | null): { level: 'low' | 'medium' | 'high' | 'critical'; label: string; color: string } {
+  if (!notes || !notes.valueGroups) {
+    return { level: 'low', label: 'Unknown', color: 'text-muted-foreground' };
+  }
+
+  const groups = notes.valueGroups;
+  if (groups >= 10) {
+    return { level: 'critical', label: `${groups} distinct values`, color: 'text-red-600' };
+  } else if (groups >= 5) {
+    return { level: 'high', label: `${groups} distinct values`, color: 'text-orange-500' };
+  } else if (groups >= 3) {
+    return { level: 'medium', label: `${groups} distinct values`, color: 'text-yellow-600' };
+  } else {
+    return { level: 'low', label: `${groups} distinct values`, color: 'text-green-600' };
+  }
+}
+
+function formatScope(scopeJson: Record<string, unknown> | null): string {
+  if (!scopeJson || Object.keys(scopeJson).length === 0) return '';
+  return Object.entries(scopeJson)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join(', ');
+}
 
 export function ReviewQueue() {
   const [statusFilter, setStatusFilter] = useState<string>('pending');
@@ -46,7 +89,7 @@ export function ReviewQueue() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Review Queue</h1>
           <p className="text-muted-foreground">
-            Items requiring manual review and resolution
+            Conflicts requiring manual review and resolution
           </p>
         </div>
       </div>
@@ -112,7 +155,7 @@ export function ReviewQueue() {
           {itemsLoading ? (
             <div className="space-y-4">
               {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-20" />
+                <Skeleton key={i} className="h-24" />
               ))}
             </div>
           ) : items && items.length > 0 ? (
@@ -120,43 +163,99 @@ export function ReviewQueue() {
               {items.map((item) => {
                 const config = statusConfig[item.status];
                 const StatusIcon = config.icon;
+                const notes = parseNotes(item.notes);
+                const severity = getConflictSeverity(notes);
+                const entityName = (item as unknown as { entityName?: string }).entityName;
+                const attributeName = (item as unknown as { attributeName?: string }).attributeName;
+                const claimCount = (item as unknown as { claimCount?: number }).claimCount;
+                const scopeJson = (item as unknown as { scopeJson?: Record<string, unknown> }).scopeJson;
+                const scope = formatScope(scopeJson ?? null);
 
                 return (
                   <div
                     key={item.id}
                     className={cn(
-                      'p-4 rounded-lg border',
+                      'p-4 rounded-lg border transition-colors hover:bg-muted/50',
                       item.priority >= 8 && item.status === 'pending'
                         ? 'border-destructive/50 bg-destructive/5'
+                        : severity.level === 'critical'
+                        ? 'border-red-300 bg-red-50/50'
+                        : severity.level === 'high'
+                        ? 'border-orange-300 bg-orange-50/50'
                         : 'bg-card'
                     )}
                   >
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <StatusIcon className="h-4 w-4" />
-                          <span className="font-medium">{item.reason}</span>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-2 flex-1">
+                        {/* Entity + Attribute Header */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {entityName ? (
+                            <>
+                              <span className="font-semibold text-lg">{entityName}</span>
+                              <span className="text-muted-foreground">→</span>
+                              <span className="font-medium text-primary">{attributeName || 'Unknown'}</span>
+                            </>
+                          ) : (
+                            <span className="font-medium">{item.reason}</span>
+                          )}
+                          {scope && (
+                            <Badge variant="outline" className="text-xs">
+                              {scope}
+                            </Badge>
+                          )}
                           {item.priority >= 8 && (
                             <Badge variant="destructive">High Priority</Badge>
                           )}
                         </div>
-                        <div className="text-sm text-muted-foreground">
-                          Type: {item.itemType} | Created: {formatDate(item.createdAt)}
+
+                        {/* Conflict Severity */}
+                        <div className="flex items-center gap-4 text-sm">
+                          <div className="flex items-center gap-1.5">
+                            <AlertTriangle className={cn('h-4 w-4', severity.color)} />
+                            <span className={severity.color}>{severity.label}</span>
+                          </div>
+                          {claimCount && (
+                            <span className="text-muted-foreground">
+                              {claimCount} total claims
+                            </span>
+                          )}
+                          {notes?.evidenceAnalysis && (
+                            <span className="text-muted-foreground">
+                              {notes.evidenceAnalysis.clearWinner
+                                ? '✓ Clear winner'
+                                : '⚠ No clear winner'}
+                            </span>
+                          )}
                         </div>
-                        {item.notes && (
-                          <div className="text-sm text-muted-foreground">
-                            Notes: {item.notes}
-                          </div>
-                        )}
-                        {item.resolvedAt && (
-                          <div className="text-sm text-muted-foreground">
-                            Resolved: {formatDate(item.resolvedAt)}
-                            {item.resolvedBy && ` by ${item.resolvedBy}`}
-                          </div>
-                        )}
+
+                        {/* Meta info */}
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                          <span>Created: {formatDate(item.createdAt)}</span>
+                          {item.resolvedAt && (
+                            <span>
+                              Resolved: {formatDate(item.resolvedAt)}
+                              {item.resolvedBy && ` by ${item.resolvedBy}`}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={config.variant}>{config.label}</Badge>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Badge variant={config.variant} className="flex items-center gap-1">
+                          <StatusIcon className="h-3 w-3" />
+                          {config.label}
+                        </Badge>
+
+                        {item.itemType === 'conflict_group' && (
+                          <Link to={`/conflicts/${item.itemId}`}>
+                            <Button size="sm" variant="outline">
+                              <ExternalLink className="h-3 w-3 mr-1" />
+                              View
+                            </Button>
+                          </Link>
+                        )}
+
                         {item.status === 'pending' && (
                           <div className="flex gap-1">
                             <Button

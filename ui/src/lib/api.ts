@@ -271,6 +271,14 @@ export const conflictApi = {
         sourceName: (claim.sourceName || claim.source_name || 'Unknown') as string,
         sourceDefaultTrust: parseFloat(String(claim.sourceDefaultTrust || claim.source_default_trust || claim.defaultTrust || claim.default_trust || 0.5)),
         truthRaw: claim.truthRaw || claim.truth_raw ? parseFloat(String(claim.truthRaw || claim.truth_raw)) : null,
+        // Evidence fields
+        quote: (claim.quote || null) as string | null,
+        stance: (claim.stance || null) as string | null,
+        // Document fields
+        documentUrl: (claim.documentUrl || claim.document_url || null) as string | null,
+        documentTitle: (claim.documentTitle || claim.document_title || null) as string | null,
+        // Value JSON
+        valueJson: (claim.valueJson || claim.value_json || { type: 'unknown', value: claim.value }) as { type: string; value: number | string; confidence?: number },
       };
     });
 

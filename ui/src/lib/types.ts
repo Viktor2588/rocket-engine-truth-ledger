@@ -165,6 +165,14 @@ export interface ClaimWithDetails extends Claim {
   sourceName: string;
   sourceDefaultTrust: number;
   truthRaw: number | null;
+  // Evidence fields
+  quote: string | null;
+  stance: string | null;
+  // Document fields
+  documentUrl: string | null;
+  documentTitle: string | null;
+  // Value from valueJson
+  valueJson: { type: string; value: number | string; confidence?: number };
 }
 
 // Fact types

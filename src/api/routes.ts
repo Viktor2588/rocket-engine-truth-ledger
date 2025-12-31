@@ -674,7 +674,17 @@ router.get('/conflict-groups/:id', asyncHandler(async (req, res) => {
 
   const group = groups[0];
 
-  // Get claims and metrics with proper column aliases
+  // Get entity and attribute names
+  const entityInfo = await sql`
+    SELECT e.canonical_name as "entityName", a.display_name as "attributeName"
+    FROM truth_ledger_claude.entities e
+    JOIN truth_ledger_claude.attributes a ON a.id = ${group.attributeId}
+    WHERE e.id = ${group.entityId}
+  `;
+  const entityName = entityInfo[0]?.entityName || null;
+  const attributeName = entityInfo[0]?.attributeName || null;
+
+  // Get claims with evidence, sources, and metrics
   const claims = await sql`
     SELECT
       c.id,
@@ -695,15 +705,33 @@ router.get('/conflict-groups/:id', asyncHandler(async (req, res) => {
       tm.truth_raw as "truthRaw",
       tm.support_score as "supportScore",
       tm.contradiction_score as "contradictionScore",
-      tm.independent_sources as "independentSources"
+      tm.independent_sources as "independentSources",
+      e.extraction_confidence as "confidence",
+      e.stance,
+      e.quote,
+      e.created_at as "extractedAt",
+      sn.text as "rawText",
+      d.url as "documentUrl",
+      d.title as "documentTitle",
+      s.id as "sourceId",
+      s.name as "sourceName",
+      s.base_trust as "sourceDefaultTrust"
     FROM truth_ledger_claude.claims c
     LEFT JOIN truth_ledger_claude.truth_metrics tm ON tm.claim_id = c.id
+    LEFT JOIN truth_ledger_claude.evidence e ON e.claim_id = c.id
+    LEFT JOIN truth_ledger_claude.snippets sn ON e.snippet_id = sn.id
+    LEFT JOIN truth_ledger_claude.documents d ON sn.document_id = d.id
+    LEFT JOIN truth_ledger_claude.sources s ON d.source_id = s.id
     WHERE c.claim_key_hash = ${group.claimKeyHash}
-    ORDER BY tm.truth_raw DESC NULLS LAST
+    ORDER BY c.value_json->>'v' ASC, tm.truth_raw DESC NULLS LAST
   `;
 
   res.json({
-    conflictGroup: group,
+    conflictGroup: {
+      ...group,
+      entityName,
+      attributeName,
+    },
     claims,
   });
 }));
@@ -1150,35 +1178,127 @@ const reviewColumns = `
 /**
  * GET /review-queue
  * List review queue items with filtering
+ * Includes entity/attribute context for conflict_group items
  */
 router.get('/review-queue', asyncHandler(async (req, res) => {
   const sql = getConnection();
   const { status = 'pending', item_type, priority, limit = '50', offset = '0' } = req.query;
 
-  let items: ReviewQueueItem[];
+  // Enhanced query that joins with conflict_groups, entities, and attributes
+  // to provide context for conflict_group review items
+  const statusVal = status as string;
+  const limitVal = parseInt(limit as string);
+  const offsetVal = parseInt(offset as string);
 
-  if (item_type) {
-    items = await sql<ReviewQueueItem[]>`
-      SELECT ${sql.unsafe(reviewColumns)} FROM truth_ledger_claude.review_queue
-      WHERE status = ${status as string}
-        AND item_type = ${item_type as string}
-      ORDER BY priority DESC, created_at ASC
-      LIMIT ${parseInt(limit as string)} OFFSET ${parseInt(offset as string)}
+  let items;
+
+  if (item_type && priority) {
+    const itemTypeVal = item_type as string;
+    const priorityVal = parseInt(priority as string);
+    items = await sql`
+      SELECT
+        rq.id,
+        rq.item_type as "itemType",
+        rq.item_id as "itemId",
+        rq.reason,
+        rq.priority,
+        rq.status,
+        rq.notes,
+        rq.resolved_at as "resolvedAt",
+        rq.resolved_by as "resolvedBy",
+        rq.created_at as "createdAt",
+        e.canonical_name as "entityName",
+        a.display_name as "attributeName",
+        cg.claim_count as "claimCount",
+        cg.scope_json as "scopeJson"
+      FROM truth_ledger_claude.review_queue rq
+      LEFT JOIN truth_ledger_claude.conflict_groups cg ON rq.item_id = cg.id AND rq.item_type = 'conflict_group'
+      LEFT JOIN truth_ledger_claude.entities e ON cg.entity_id = e.id
+      LEFT JOIN truth_ledger_claude.attributes a ON cg.attribute_id = a.id
+      WHERE rq.status = ${statusVal}
+        AND rq.item_type = ${itemTypeVal}
+        AND rq.priority >= ${priorityVal}
+      ORDER BY rq.priority DESC, rq.created_at ASC
+      LIMIT ${limitVal} OFFSET ${offsetVal}
+    `;
+  } else if (item_type) {
+    const itemTypeVal = item_type as string;
+    items = await sql`
+      SELECT
+        rq.id,
+        rq.item_type as "itemType",
+        rq.item_id as "itemId",
+        rq.reason,
+        rq.priority,
+        rq.status,
+        rq.notes,
+        rq.resolved_at as "resolvedAt",
+        rq.resolved_by as "resolvedBy",
+        rq.created_at as "createdAt",
+        e.canonical_name as "entityName",
+        a.display_name as "attributeName",
+        cg.claim_count as "claimCount",
+        cg.scope_json as "scopeJson"
+      FROM truth_ledger_claude.review_queue rq
+      LEFT JOIN truth_ledger_claude.conflict_groups cg ON rq.item_id = cg.id AND rq.item_type = 'conflict_group'
+      LEFT JOIN truth_ledger_claude.entities e ON cg.entity_id = e.id
+      LEFT JOIN truth_ledger_claude.attributes a ON cg.attribute_id = a.id
+      WHERE rq.status = ${statusVal}
+        AND rq.item_type = ${itemTypeVal}
+      ORDER BY rq.priority DESC, rq.created_at ASC
+      LIMIT ${limitVal} OFFSET ${offsetVal}
     `;
   } else if (priority) {
-    items = await sql<ReviewQueueItem[]>`
-      SELECT ${sql.unsafe(reviewColumns)} FROM truth_ledger_claude.review_queue
-      WHERE status = ${status as string}
-        AND priority >= ${parseInt(priority as string)}
-      ORDER BY priority DESC, created_at ASC
-      LIMIT ${parseInt(limit as string)} OFFSET ${parseInt(offset as string)}
+    const priorityVal = parseInt(priority as string);
+    items = await sql`
+      SELECT
+        rq.id,
+        rq.item_type as "itemType",
+        rq.item_id as "itemId",
+        rq.reason,
+        rq.priority,
+        rq.status,
+        rq.notes,
+        rq.resolved_at as "resolvedAt",
+        rq.resolved_by as "resolvedBy",
+        rq.created_at as "createdAt",
+        e.canonical_name as "entityName",
+        a.display_name as "attributeName",
+        cg.claim_count as "claimCount",
+        cg.scope_json as "scopeJson"
+      FROM truth_ledger_claude.review_queue rq
+      LEFT JOIN truth_ledger_claude.conflict_groups cg ON rq.item_id = cg.id AND rq.item_type = 'conflict_group'
+      LEFT JOIN truth_ledger_claude.entities e ON cg.entity_id = e.id
+      LEFT JOIN truth_ledger_claude.attributes a ON cg.attribute_id = a.id
+      WHERE rq.status = ${statusVal}
+        AND rq.priority >= ${priorityVal}
+      ORDER BY rq.priority DESC, rq.created_at ASC
+      LIMIT ${limitVal} OFFSET ${offsetVal}
     `;
   } else {
-    items = await sql<ReviewQueueItem[]>`
-      SELECT ${sql.unsafe(reviewColumns)} FROM truth_ledger_claude.review_queue
-      WHERE status = ${status as string}
-      ORDER BY priority DESC, created_at ASC
-      LIMIT ${parseInt(limit as string)} OFFSET ${parseInt(offset as string)}
+    items = await sql`
+      SELECT
+        rq.id,
+        rq.item_type as "itemType",
+        rq.item_id as "itemId",
+        rq.reason,
+        rq.priority,
+        rq.status,
+        rq.notes,
+        rq.resolved_at as "resolvedAt",
+        rq.resolved_by as "resolvedBy",
+        rq.created_at as "createdAt",
+        e.canonical_name as "entityName",
+        a.display_name as "attributeName",
+        cg.claim_count as "claimCount",
+        cg.scope_json as "scopeJson"
+      FROM truth_ledger_claude.review_queue rq
+      LEFT JOIN truth_ledger_claude.conflict_groups cg ON rq.item_id = cg.id AND rq.item_type = 'conflict_group'
+      LEFT JOIN truth_ledger_claude.entities e ON cg.entity_id = e.id
+      LEFT JOIN truth_ledger_claude.attributes a ON cg.attribute_id = a.id
+      WHERE rq.status = ${statusVal}
+      ORDER BY rq.priority DESC, rq.created_at ASC
+      LIMIT ${limitVal} OFFSET ${offsetVal}
     `;
   }
 
