@@ -247,8 +247,9 @@ export const conflictApi = {
 
   get: async (id: string): Promise<ConflictGroupWithClaims> => {
     const response = await api.get(`/conflict-groups/${id}`);
-    const raw = response.data as Record<string, unknown>;
-    const claims = ((raw.claims || []) as unknown[]).map((c: unknown) => {
+    const data = response.data as { conflictGroup?: Record<string, unknown>; conflict_group?: Record<string, unknown>; claims?: unknown[] };
+    const raw = (data.conflictGroup || data.conflict_group || response.data) as Record<string, unknown>;
+    const claims = ((data.claims || raw.claims || []) as unknown[]).map((c: unknown) => {
       const claim = c as Record<string, unknown>;
       return {
         id: claim.id as string,
