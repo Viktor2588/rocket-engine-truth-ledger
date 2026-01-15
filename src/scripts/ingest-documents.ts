@@ -37,7 +37,7 @@ async function ingestDocuments() {
 
   // Find Wikipedia source
   const sources = await sql`
-    SELECT id, name FROM truth_ledger_claude.sources
+    SELECT id, name FROM truth_ledger.sources
     WHERE name LIKE 'Wikipedia%'
     ORDER BY name
     LIMIT 1
@@ -106,10 +106,10 @@ async function ingestDocuments() {
 
   // Show document and snippet counts
   const docCount = await sql`
-    SELECT COUNT(*)::int as count FROM truth_ledger_claude.documents
+    SELECT COUNT(*)::int as count FROM truth_ledger.documents
   `;
   const snippetCount = await sql`
-    SELECT COUNT(*)::int as count FROM truth_ledger_claude.snippets
+    SELECT COUNT(*)::int as count FROM truth_ledger.snippets
   `;
 
   console.log('\n📋 Database counts:');

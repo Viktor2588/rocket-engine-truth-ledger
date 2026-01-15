@@ -15,7 +15,7 @@ async function main() {
   console.log('Claims table columns:', columns.map(c => c.column_name).join(', '));
 
   const claims = await sql`
-    SELECT * FROM truth_ledger_claude.claims LIMIT 3
+    SELECT * FROM truth_ledger.claims LIMIT 3
   `;
   console.log('\nSample claims:');
   for (const claim of claims) {

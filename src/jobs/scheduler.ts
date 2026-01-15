@@ -387,7 +387,7 @@ export class Scheduler {
     try {
       const sql = getConnection();
       await sql`
-        INSERT INTO truth_ledger_claude.sync_status (
+        INSERT INTO truth_ledger.sync_status (
           sync_type,
           status,
           started_at,

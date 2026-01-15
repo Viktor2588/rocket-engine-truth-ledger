@@ -24,7 +24,7 @@ async function migrateSource(
   try {
     // Upsert source with new fields
     const result = await sql`
-      INSERT INTO truth_ledger_claude.sources (
+      INSERT INTO truth_ledger.sources (
         name,
         source_type,
         base_url,
@@ -56,7 +56,7 @@ async function migrateSource(
         default_doc_type = EXCLUDED.default_doc_type,
         is_active = EXCLUDED.is_active,
         tags = EXCLUDED.tags,
-        metadata = truth_ledger_claude.sources.metadata || EXCLUDED.metadata,
+        metadata = truth_ledger.sources.metadata || EXCLUDED.metadata,
         updated_at = NOW()
       RETURNING id, (xmax = 0) as inserted
     `;
@@ -77,7 +77,7 @@ async function migrateSource(
       for (const feed of config.feeds) {
         try {
           await sql`
-            INSERT INTO truth_ledger_claude.source_feeds (
+            INSERT INTO truth_ledger.source_feeds (
               source_id,
               feed_url,
               feed_type,
@@ -113,7 +113,7 @@ async function migrateSource(
       for (const url of config.urls) {
         try {
           await sql`
-            INSERT INTO truth_ledger_claude.source_urls (
+            INSERT INTO truth_ledger.source_urls (
               source_id,
               url,
               is_active
@@ -182,11 +182,11 @@ async function main() {
   console.log('\n📋 Database Totals:');
   const counts = await sql`
     SELECT
-      (SELECT COUNT(*)::int FROM truth_ledger_claude.sources) as sources,
-      (SELECT COUNT(*)::int FROM truth_ledger_claude.sources WHERE is_active = true) as active_sources,
-      (SELECT COUNT(*)::int FROM truth_ledger_claude.source_feeds) as feeds,
-      (SELECT COUNT(*)::int FROM truth_ledger_claude.source_feeds WHERE is_active = true) as active_feeds,
-      (SELECT COUNT(*)::int FROM truth_ledger_claude.source_urls) as urls
+      (SELECT COUNT(*)::int FROM truth_ledger.sources) as sources,
+      (SELECT COUNT(*)::int FROM truth_ledger.sources WHERE is_active = true) as active_sources,
+      (SELECT COUNT(*)::int FROM truth_ledger.source_feeds) as feeds,
+      (SELECT COUNT(*)::int FROM truth_ledger.source_feeds WHERE is_active = true) as active_feeds,
+      (SELECT COUNT(*)::int FROM truth_ledger.source_urls) as urls
   `;
   console.log(`  Total sources: ${counts[0].sources} (${counts[0].active_sources} active)`);
   console.log(`  Total feeds: ${counts[0].feeds} (${counts[0].active_feeds} active)`);

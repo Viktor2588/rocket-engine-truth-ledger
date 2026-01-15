@@ -351,7 +351,7 @@ export class AIExtractor {
         canonical_name as "canonicalName",
         aliases,
         metadata
-      FROM truth_ledger_claude.entities
+      FROM truth_ledger.entities
     `;
 
     for (const entity of entities as unknown as Entity[]) {
@@ -371,7 +371,7 @@ export class AIExtractor {
         display_name as "displayName",
         value_type as "valueType",
         unit
-      FROM truth_ledger_claude.attributes
+      FROM truth_ledger.attributes
     `;
 
     for (const attr of attributes as unknown as Attribute[]) {
@@ -721,14 +721,31 @@ export class AIExtractor {
     // Russian engines - these have known mass values that could be confused
     'rd-180': { min: 3800000, max: 4200000, mass: 5480 },  // ~4.15 MN, mass 5480 kg
     'rd-171': { min: 7200000, max: 8000000, mass: 9300 },  // ~7.9 MN, mass 9300 kg
-    'rd-191': { min: 1900000, max: 2100000 },             // ~2.0 MN
-    'rd-170': { min: 7200000, max: 8000000 },             // ~7.9 MN (4 chambers)
+    'rd-191': { min: 1900000, max: 2200000, mass: 2290 },  // ~2.0 MN
+    'rd-170': { min: 7200000, max: 8000000, mass: 9500 },  // ~7.9 MN (4 chambers)
+    'nk-33': { min: 1500000, max: 1800000, mass: 1240 },   // ~1.68 MN
     // American engines
-    'f-1': { min: 6700000, max: 7000000, mass: 8400 },    // ~6.77 MN, mass 8400 kg
-    'rs-68': { min: 2900000, max: 3400000 },              // ~3.1 MN
-    'be-4': { min: 2200000, max: 2500000 },               // ~2.4 MN
-    // Small engines - thrust much lower than mass×1000
-    'be-7': { min: 40000, max: 50000 },                   // ~44.5 kN (not MN!)
+    'f-1': { min: 6700000, max: 7000000, mass: 8400 },     // ~6.77 MN, mass 8400 kg
+    'rs-68': { min: 2900000, max: 3400000, mass: 6600 },   // ~3.1 MN
+    'rs-25': { min: 1800000, max: 2300000, mass: 3177 },   // ~2.0-2.3 MN
+    'ssme': { min: 1800000, max: 2300000, mass: 3177 },    // Same as RS-25
+    'rl-10': { min: 60000, max: 120000, mass: 168 },       // ~110 kN
+    'be-4': { min: 2200000, max: 2600000, mass: 2300 },    // ~2.4 MN
+    'be-7': { min: 40000, max: 50000 },                    // ~44.5 kN (not MN!)
+    // SpaceX engines - critical to catch stage vs engine confusion
+    'raptor': { min: 1800000, max: 2800000, mass: 1600 },  // ~2.0-2.5 MN single engine
+    'raptor2': { min: 2200000, max: 2400000, mass: 1600 }, // Raptor 2 specifically
+    'raptor3': { min: 2600000, max: 2900000, mass: 1500 }, // Raptor 3 (higher thrust)
+    'raptorv': { min: 2400000, max: 2700000 },             // Raptor Vacuum ~2.5 MN
+    'raptorva': { min: 2400000, max: 2700000 },            // Raptor Vacuum variant
+    'merlin': { min: 700000, max: 1000000, mass: 470 },    // Merlin family ~845 kN
+    'merlin1d': { min: 800000, max: 950000, mass: 470 },   // Merlin 1D specifically
+    // European engines
+    'vulcain': { min: 1100000, max: 1400000, mass: 2100 }, // ~1.3 MN
+    'vinci': { min: 150000, max: 200000 },                 // ~180 kN
+    // Japanese engines
+    'le-7': { min: 1000000, max: 1200000, mass: 1800 },    // ~1.1 MN
+    'le-7a': { min: 1000000, max: 1200000, mass: 1800 },   // ~1.1 MN
   };
 
   /**
@@ -828,23 +845,30 @@ export class AIExtractor {
 
       case 'engines.isp_s':
         // ISP for chemical rockets: 200-470s range
-        // >1000s is IMPOSSIBLE for chemical rockets - likely confused with thrust or other column
-        if (value > 1000) {
+        // >500s is IMPOSSIBLE for chemical rockets (max is ~465s for LH2/LOX)
+        if (value > 500) {
           issues.push(`ISP ${value}s is impossible for chemical rockets (max ~470s) - likely column confusion`);
           shouldReject = true;
         } else if (value < 100) {
           issues.push(`ISP ${value}s is too low for any practical rocket engine`);
           shouldReject = true;
-        } else if (value < 150 || value > 500) {
+        } else if (value < 180 || value > 470) {
           issues.push(`ISP ${value}s is outside typical range (200-465s)`);
-          confidenceMultiplier *= 0.5;
+          confidenceMultiplier *= 0.7;
         }
         break;
 
       case 'engines.mass_kg':
-        // Engine mass typically 50kg (small) to 8000kg (F-1)
-        if (value < 10 || value > 10000) {
-          issues.push(`Engine mass ${value}kg is outside typical range`);
+        // Engine mass typically 20kg (small electric pump-fed) to 9500kg (RD-170)
+        // F-1 is ~8400kg, RD-170 is ~9500kg - these are the heaviest ever
+        if (value > 12000) {
+          issues.push(`Engine mass ${value}kg exceeds largest known engine (RD-170 at 9500kg)`);
+          shouldReject = true;
+        } else if (value < 5) {
+          issues.push(`Engine mass ${value}kg is too low for any practical engine`);
+          shouldReject = true;
+        } else if (value < 20 || value > 10000) {
+          issues.push(`Engine mass ${value}kg is outside typical range (20-9500kg)`);
           confidenceMultiplier *= 0.5;
         }
         break;

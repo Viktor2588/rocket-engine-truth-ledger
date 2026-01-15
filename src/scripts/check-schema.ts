@@ -10,7 +10,7 @@ async function main() {
   const result = await sql`
     SELECT column_name, data_type, is_nullable
     FROM information_schema.columns
-    WHERE table_schema = 'truth_ledger_claude' AND table_name = 'entities'
+    WHERE table_schema = 'truth_ledger' AND table_name = 'entities'
     ORDER BY ordinal_position
   `;
 
@@ -22,7 +22,7 @@ async function main() {
   const indexes = await sql`
     SELECT indexname, indexdef
     FROM pg_indexes
-    WHERE schemaname = 'truth_ledger_claude' AND tablename = 'entities'
+    WHERE schemaname = 'truth_ledger' AND tablename = 'entities'
   `;
 
   console.log('\nIndexes:');
@@ -33,7 +33,7 @@ async function main() {
   const constraints = await sql`
     SELECT conname, contype
     FROM pg_constraint
-    WHERE conrelid = 'truth_ledger_claude.entities'::regclass
+    WHERE conrelid = 'truth_ledger.entities'::regclass
   `;
 
   console.log('\nConstraints:');

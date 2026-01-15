@@ -20,7 +20,7 @@ async function debugExtractionVerbose() {
       display_name as "displayName",
       value_type as "valueType",
       unit
-    FROM truth_ledger_claude.attributes
+    FROM truth_ledger.attributes
   `;
 
   console.log('Loaded attributes:');
@@ -53,7 +53,7 @@ async function debugExtractionVerbose() {
   // Get a few snippets that mention entities and have numeric data
   const testSnippets = await sql`
     SELECT id, text, snippet_type as "snippetType"
-    FROM truth_ledger_claude.snippets
+    FROM truth_ledger.snippets
     WHERE text ~* '(\\d+(?:\\.\\d+)?\\s*(kN|MN|N|kg|tons?|seconds?|s|bar|psi))'
     LIMIT 10
   `;

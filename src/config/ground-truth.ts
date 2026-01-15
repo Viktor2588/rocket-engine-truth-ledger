@@ -207,6 +207,298 @@ export const GROUND_TRUTH: GroundTruthValue[] = [
     source: 'NPO Energomash official',
     tolerance: 0.03,
   },
+  {
+    entityName: 'RD-180',
+    attributeName: 'engines.mass_kg',
+    value: 5480,
+    unit: 'kg',
+    scope: {},
+    source: 'NPO Energomash official',
+    tolerance: 0.05,
+  },
+
+  // ========================================
+  // RD-191
+  // ========================================
+  {
+    entityName: 'RD-191',
+    attributeName: 'engines.thrust_n',
+    value: 2090000,
+    unit: 'N',
+    scope: { altitude: 'sl' },
+    source: 'NPO Energomash official',
+    tolerance: 0.05,
+  },
+  {
+    entityName: 'RD-191',
+    attributeName: 'engines.mass_kg',
+    value: 2290,
+    unit: 'kg',
+    scope: {},
+    source: 'NPO Energomash official',
+    tolerance: 0.05,
+  },
+
+  // ========================================
+  // RS-68 / RS-68A
+  // ========================================
+  {
+    entityName: 'RS-68',
+    attributeName: 'engines.thrust_n',
+    value: 2950000,
+    unit: 'N',
+    scope: { altitude: 'sl' },
+    source: 'Aerojet Rocketdyne',
+    tolerance: 0.05,
+  },
+  {
+    entityName: 'RS-68',
+    attributeName: 'engines.isp_s',
+    value: 365,
+    unit: 's',
+    scope: { altitude: 'sl' },
+    source: 'Aerojet Rocketdyne',
+    tolerance: 0.03,
+  },
+  {
+    entityName: 'RS-68',
+    attributeName: 'engines.isp_s',
+    value: 410,
+    unit: 's',
+    scope: { altitude: 'vac' },
+    source: 'Aerojet Rocketdyne',
+    tolerance: 0.03,
+  },
+  {
+    entityName: 'RS-68',
+    attributeName: 'engines.mass_kg',
+    value: 6600,
+    unit: 'kg',
+    scope: {},
+    source: 'Aerojet Rocketdyne',
+    tolerance: 0.05,
+  },
+
+  // ========================================
+  // F-1 (Saturn V)
+  // ========================================
+  {
+    entityName: 'F-1',
+    attributeName: 'engines.thrust_n',
+    value: 6770000,
+    unit: 'N',
+    scope: { altitude: 'sl' },
+    source: 'NASA historical',
+    tolerance: 0.03,
+  },
+  {
+    entityName: 'F-1',
+    attributeName: 'engines.isp_s',
+    value: 263,
+    unit: 's',
+    scope: { altitude: 'sl' },
+    source: 'NASA historical',
+    tolerance: 0.03,
+  },
+  {
+    entityName: 'F-1',
+    attributeName: 'engines.mass_kg',
+    value: 8400,
+    unit: 'kg',
+    scope: {},
+    source: 'NASA historical',
+    tolerance: 0.05,
+  },
+
+  // ========================================
+  // RL-10 Family
+  // ========================================
+  {
+    entityName: 'RL-10',
+    attributeName: 'engines.thrust_n',
+    value: 110000,
+    unit: 'N',
+    scope: { altitude: 'vac' },
+    source: 'Aerojet Rocketdyne',
+    tolerance: 0.10,
+  },
+  {
+    entityName: 'RL-10',
+    attributeName: 'engines.isp_s',
+    value: 465,
+    unit: 's',
+    scope: { altitude: 'vac' },
+    source: 'Aerojet Rocketdyne',
+    tolerance: 0.03,
+  },
+  {
+    entityName: 'RL-10',
+    attributeName: 'engines.mass_kg',
+    value: 168,
+    unit: 'kg',
+    scope: {},
+    source: 'Aerojet Rocketdyne',
+    tolerance: 0.10,
+  },
+
+  // ========================================
+  // Raptor Vacuum
+  // ========================================
+  {
+    entityName: 'Raptor Vacuum',
+    attributeName: 'engines.thrust_n',
+    value: 2500000, // ~2.5 MN vacuum
+    unit: 'N',
+    scope: { altitude: 'vac' },
+    source: 'SpaceX estimates',
+    tolerance: 0.10,
+  },
+  {
+    entityName: 'Raptor Vacuum',
+    attributeName: 'engines.isp_s',
+    value: 380,
+    unit: 's',
+    scope: { altitude: 'vac' },
+    source: 'SpaceX estimates',
+    tolerance: 0.05,
+  },
+
+  // ========================================
+  // BE-4 Mass
+  // ========================================
+  {
+    entityName: 'BE-4',
+    attributeName: 'engines.mass_kg',
+    value: 2300,
+    unit: 'kg',
+    scope: {},
+    source: 'Blue Origin official',
+    tolerance: 0.10,
+  },
+
+  // ========================================
+  // Japanese LE-7A
+  // ========================================
+  {
+    entityName: 'LE-7A',
+    attributeName: 'engines.thrust_n',
+    value: 1098000,
+    unit: 'N',
+    scope: { altitude: 'vac' },
+    source: 'JAXA official',
+    tolerance: 0.03,
+  },
+  {
+    entityName: 'LE-7A',
+    attributeName: 'engines.isp_s',
+    value: 440,
+    unit: 's',
+    scope: { altitude: 'vac' },
+    source: 'JAXA official',
+    tolerance: 0.03,
+  },
+  {
+    entityName: 'LE-7A',
+    attributeName: 'engines.mass_kg',
+    value: 1800,
+    unit: 'kg',
+    scope: {},
+    source: 'JAXA official',
+    tolerance: 0.10,
+  },
+
+  // ========================================
+  // Vulcain 2
+  // ========================================
+  {
+    entityName: 'Vulcain 2',
+    attributeName: 'engines.thrust_n',
+    value: 1390000,
+    unit: 'N',
+    scope: { altitude: 'vac' },
+    source: 'ArianeGroup official',
+    tolerance: 0.03,
+  },
+  {
+    entityName: 'Vulcain 2',
+    attributeName: 'engines.isp_s',
+    value: 434,
+    unit: 's',
+    scope: { altitude: 'vac' },
+    source: 'ArianeGroup official',
+    tolerance: 0.03,
+  },
+  {
+    entityName: 'Vulcain 2',
+    attributeName: 'engines.mass_kg',
+    value: 2100,
+    unit: 'kg',
+    scope: {},
+    source: 'ArianeGroup official',
+    tolerance: 0.10,
+  },
+
+  // ========================================
+  // NK-33
+  // ========================================
+  {
+    entityName: 'NK-33',
+    attributeName: 'engines.thrust_n',
+    value: 1680000,
+    unit: 'N',
+    scope: { altitude: 'sl' },
+    source: 'NPO Energomash historical',
+    tolerance: 0.05,
+  },
+  {
+    entityName: 'NK-33',
+    attributeName: 'engines.isp_s',
+    value: 331,
+    unit: 's',
+    scope: { altitude: 'vac' },
+    source: 'NPO Energomash historical',
+    tolerance: 0.03,
+  },
+  {
+    entityName: 'NK-33',
+    attributeName: 'engines.mass_kg',
+    value: 1240,
+    unit: 'kg',
+    scope: {},
+    source: 'NPO Energomash historical',
+    tolerance: 0.05,
+  },
+
+  // ========================================
+  // Rutherford
+  // ========================================
+  {
+    entityName: 'Rutherford',
+    attributeName: 'engines.thrust_n',
+    value: 25000,
+    unit: 'N',
+    scope: { altitude: 'sl' },
+    source: 'Rocket Lab official',
+    tolerance: 0.05,
+  },
+  {
+    entityName: 'Rutherford',
+    attributeName: 'engines.isp_s',
+    value: 311,
+    unit: 's',
+    scope: { altitude: 'vac' },
+    source: 'Rocket Lab official',
+    tolerance: 0.03,
+  },
+  {
+    entityName: 'Rutherford',
+    attributeName: 'engines.mass_kg',
+    value: 35,
+    unit: 'kg',
+    scope: {},
+    source: 'Rocket Lab official',
+    tolerance: 0.10,
+  },
 ];
 
 /**

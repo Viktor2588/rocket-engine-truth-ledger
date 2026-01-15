@@ -31,6 +31,8 @@
     "ingest:all": "tsx src/scripts/ingest-all-sources.ts",
     "ingest:feeds": "tsx src/scripts/ingest-feeds.ts",
     "ingest:feeds:schedule": "tsx src/scripts/ingest-feeds.ts --schedule",
+    "sync:engines": "tsx src/scripts/sync-engines-to-backend.ts",
+    "cleanup:claims": "tsx src/scripts/cleanup-bad-claims.ts",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",

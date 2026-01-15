@@ -13,7 +13,7 @@ async function populateFieldLinks() {
 
   // Get current count
   const beforeCount = await sql`
-    SELECT COUNT(*)::int as count FROM truth_ledger_claude.field_links
+    SELECT COUNT(*)::int as count FROM truth_ledger.field_links
   `;
   console.log(`Before: ${beforeCount[0].count} field links`);
 
@@ -24,8 +24,8 @@ async function populateFieldLinks() {
       cg.claim_key_hash,
       cg.entity_id,
       a.canonical_name as attribute_name
-    FROM truth_ledger_claude.conflict_groups cg
-    JOIN truth_ledger_claude.attributes a ON a.id = cg.attribute_id
+    FROM truth_ledger.conflict_groups cg
+    JOIN truth_ledger.attributes a ON a.id = cg.attribute_id
     ORDER BY cg.entity_id, a.canonical_name
   `;
 
@@ -39,7 +39,7 @@ async function populateFieldLinks() {
 
     // Check if link already exists
     const existing = await sql`
-      SELECT id FROM truth_ledger_claude.field_links
+      SELECT id FROM truth_ledger.field_links
       WHERE entity_id = ${cg.entity_id}
         AND field_name = ${fieldName}
     `;
@@ -47,7 +47,7 @@ async function populateFieldLinks() {
     if (existing.length > 0) {
       // Update existing link
       await sql`
-        UPDATE truth_ledger_claude.field_links
+        UPDATE truth_ledger.field_links
         SET claim_key_hash = ${cg.claim_key_hash},
             updated_at = NOW()
         WHERE entity_id = ${cg.entity_id}
@@ -57,7 +57,7 @@ async function populateFieldLinks() {
     } else {
       // Create new link
       await sql`
-        INSERT INTO truth_ledger_claude.field_links (
+        INSERT INTO truth_ledger.field_links (
           entity_id,
           field_name,
           claim_key_hash
@@ -77,7 +77,7 @@ async function populateFieldLinks() {
 
   // Show after count
   const afterCount = await sql`
-    SELECT COUNT(*)::int as count FROM truth_ledger_claude.field_links
+    SELECT COUNT(*)::int as count FROM truth_ledger.field_links
   `;
   console.log(`\nAfter: ${afterCount[0].count} field links`);
 
@@ -87,8 +87,8 @@ async function populateFieldLinks() {
       fl.field_name,
       e.canonical_name as entity_name,
       fl.claim_key_hash
-    FROM truth_ledger_claude.field_links fl
-    JOIN truth_ledger_claude.entities e ON e.id = fl.entity_id
+    FROM truth_ledger.field_links fl
+    JOIN truth_ledger.entities e ON e.id = fl.entity_id
     ORDER BY e.canonical_name, fl.field_name
     LIMIT 15
   `;

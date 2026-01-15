@@ -196,7 +196,7 @@ export class Scorer {
           metadata,
           created_at as "createdAt",
           updated_at as "updatedAt"
-        FROM truth_ledger_claude.claims
+        FROM truth_ledger.claims
         WHERE id = ANY(${config.claimIds})
         ORDER BY created_at ASC
       `;
@@ -220,8 +220,8 @@ export class Scorer {
           c.metadata,
           c.created_at as "createdAt",
           c.updated_at as "updatedAt"
-        FROM truth_ledger_claude.claims c
-        JOIN truth_ledger_claude.conflict_groups cg ON cg.claim_key_hash = c.claim_key_hash
+        FROM truth_ledger.claims c
+        JOIN truth_ledger.conflict_groups cg ON cg.claim_key_hash = c.claim_key_hash
         WHERE cg.id = ANY(${config.conflictGroupIds})
         ORDER BY c.created_at ASC
         LIMIT ${limit}
@@ -246,7 +246,7 @@ export class Scorer {
           metadata,
           created_at as "createdAt",
           updated_at as "updatedAt"
-        FROM truth_ledger_claude.claims
+        FROM truth_ledger.claims
         WHERE entity_id = ANY(${config.entityIds})
         ORDER BY created_at ASC
         LIMIT ${limit}
@@ -271,7 +271,7 @@ export class Scorer {
           metadata,
           created_at as "createdAt",
           updated_at as "updatedAt"
-        FROM truth_ledger_claude.claims
+        FROM truth_ledger.claims
         ORDER BY created_at ASC
         LIMIT ${limit}
       `;
@@ -295,8 +295,8 @@ export class Scorer {
         c.metadata,
         c.created_at as "createdAt",
         c.updated_at as "updatedAt"
-      FROM truth_ledger_claude.claims c
-      LEFT JOIN truth_ledger_claude.truth_metrics tm ON tm.claim_id = c.id
+      FROM truth_ledger.claims c
+      LEFT JOIN truth_ledger.truth_metrics tm ON tm.claim_id = c.id
       WHERE tm.id IS NULL
          OR tm.computed_at < c.updated_at
       ORDER BY c.created_at ASC
@@ -342,10 +342,10 @@ export class Scorer {
         src.independence_cluster_id,
         d.published_at,
         d.supersedes_document_id
-      FROM truth_ledger_claude.evidence e
-      JOIN truth_ledger_claude.snippets s ON s.id = e.snippet_id
-      JOIN truth_ledger_claude.documents d ON d.id = s.document_id
-      JOIN truth_ledger_claude.sources src ON src.id = d.source_id
+      FROM truth_ledger.evidence e
+      JOIN truth_ledger.snippets s ON s.id = e.snippet_id
+      JOIN truth_ledger.documents d ON d.id = s.document_id
+      JOIN truth_ledger.sources src ON src.id = d.source_id
       WHERE e.claim_id = ${claim.id}
       ORDER BY d.published_at DESC NULLS LAST
     `;
@@ -378,7 +378,7 @@ export class Scorer {
 
     // Get conflict group
     const conflictGroups = await sql<{ id: string }[]>`
-      SELECT id FROM truth_ledger_claude.conflict_groups
+      SELECT id FROM truth_ledger.conflict_groups
       WHERE claim_key_hash = ${claim.claimKeyHash}
     `;
 
@@ -389,7 +389,7 @@ export class Scorer {
     // Upsert truth_metrics
     return await transaction(async (txSql) => {
       const existingMetrics = await txSql<TruthMetrics[]>`
-        SELECT * FROM truth_ledger_claude.truth_metrics
+        SELECT * FROM truth_ledger.truth_metrics
         WHERE claim_id = ${claim.id}
       `;
 
@@ -400,7 +400,7 @@ export class Scorer {
       if (existingMetrics.length > 0) {
         // Update existing
         const updateResult = await txSql<TruthMetrics[]>`
-          UPDATE truth_ledger_claude.truth_metrics
+          UPDATE truth_ledger.truth_metrics
           SET
             truth_raw = ${scores.truthRaw},
             support_score = ${scores.supportScore},
@@ -418,7 +418,7 @@ export class Scorer {
       } else {
         // Insert new
         const insertResult = await txSql<TruthMetrics[]>`
-          INSERT INTO truth_ledger_claude.truth_metrics (
+          INSERT INTO truth_ledger.truth_metrics (
             conflict_group_id,
             claim_id,
             truth_raw,
@@ -607,7 +607,7 @@ export class Scorer {
   static async getMetrics(claimId: string): Promise<TruthMetrics | null> {
     const sql = getConnection();
     const result = await sql<TruthMetrics[]>`
-      SELECT * FROM truth_ledger_claude.truth_metrics
+      SELECT * FROM truth_ledger.truth_metrics
       WHERE claim_id = ${claimId}
     `;
     return result[0] || null;
@@ -619,7 +619,7 @@ export class Scorer {
   static async getGroupMetrics(conflictGroupId: string): Promise<TruthMetrics[]> {
     const sql = getConnection();
     return await sql<TruthMetrics[]>`
-      SELECT * FROM truth_ledger_claude.truth_metrics
+      SELECT * FROM truth_ledger.truth_metrics
       WHERE conflict_group_id = ${conflictGroupId}
       ORDER BY truth_raw DESC
     `;
@@ -636,8 +636,8 @@ export class Scorer {
 
     const result = await sql<Array<Claim & TruthMetrics>>`
       SELECT c.*, tm.*
-      FROM truth_ledger_claude.claims c
-      JOIN truth_ledger_claude.truth_metrics tm ON tm.claim_id = c.id
+      FROM truth_ledger.claims c
+      JOIN truth_ledger.truth_metrics tm ON tm.claim_id = c.id
       WHERE c.claim_key_hash = ${claimKeyHash}
       ORDER BY tm.truth_raw DESC
       LIMIT 1

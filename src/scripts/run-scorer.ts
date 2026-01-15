@@ -14,10 +14,10 @@ async function runScorer() {
 
   // Show current state
   const claimCount = await sql`
-    SELECT COUNT(*)::int as count FROM truth_ledger_claude.claims
+    SELECT COUNT(*)::int as count FROM truth_ledger.claims
   `;
   const metricsCount = await sql`
-    SELECT COUNT(*)::int as count FROM truth_ledger_claude.truth_metrics
+    SELECT COUNT(*)::int as count FROM truth_ledger.truth_metrics
   `;
 
   console.log('Before scoring:');
@@ -44,7 +44,7 @@ async function runScorer() {
 
   // Show after state
   const newMetricsCount = await sql`
-    SELECT COUNT(*)::int as count FROM truth_ledger_claude.truth_metrics
+    SELECT COUNT(*)::int as count FROM truth_ledger.truth_metrics
   `;
 
   console.log('\n📊 Database counts after scoring:');
@@ -61,10 +61,10 @@ async function runScorer() {
       tm.independent_sources,
       c.value_json,
       c.unit
-    FROM truth_ledger_claude.truth_metrics tm
-    JOIN truth_ledger_claude.claims c ON tm.claim_id = c.id
-    JOIN truth_ledger_claude.entities e ON c.entity_id = e.id
-    JOIN truth_ledger_claude.attributes a ON c.attribute_id = a.id
+    FROM truth_ledger.truth_metrics tm
+    JOIN truth_ledger.claims c ON tm.claim_id = c.id
+    JOIN truth_ledger.entities e ON c.entity_id = e.id
+    JOIN truth_ledger.attributes a ON c.attribute_id = a.id
     ORDER BY tm.truth_raw DESC
     LIMIT 20
   `;

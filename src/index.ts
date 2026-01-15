@@ -121,43 +121,43 @@ async function showStatus() {
       const counts = await sql`
         SELECT
           'sources' as table_name,
-          (SELECT COUNT(*) FROM truth_ledger_claude.sources) as count
+          (SELECT COUNT(*) FROM truth_ledger.sources) as count
         UNION ALL
         SELECT
           'documents',
-          (SELECT COUNT(*) FROM truth_ledger_claude.documents)
+          (SELECT COUNT(*) FROM truth_ledger.documents)
         UNION ALL
         SELECT
           'snippets',
-          (SELECT COUNT(*) FROM truth_ledger_claude.snippets)
+          (SELECT COUNT(*) FROM truth_ledger.snippets)
         UNION ALL
         SELECT
           'entities',
-          (SELECT COUNT(*) FROM truth_ledger_claude.entities)
+          (SELECT COUNT(*) FROM truth_ledger.entities)
         UNION ALL
         SELECT
           'attributes',
-          (SELECT COUNT(*) FROM truth_ledger_claude.attributes)
+          (SELECT COUNT(*) FROM truth_ledger.attributes)
         UNION ALL
         SELECT
           'conflict_groups',
-          (SELECT COUNT(*) FROM truth_ledger_claude.conflict_groups)
+          (SELECT COUNT(*) FROM truth_ledger.conflict_groups)
         UNION ALL
         SELECT
           'claims',
-          (SELECT COUNT(*) FROM truth_ledger_claude.claims)
+          (SELECT COUNT(*) FROM truth_ledger.claims)
         UNION ALL
         SELECT
           'evidence',
-          (SELECT COUNT(*) FROM truth_ledger_claude.evidence)
+          (SELECT COUNT(*) FROM truth_ledger.evidence)
         UNION ALL
         SELECT
           'truth_metrics',
-          (SELECT COUNT(*) FROM truth_ledger_claude.truth_metrics)
+          (SELECT COUNT(*) FROM truth_ledger.truth_metrics)
         UNION ALL
         SELECT
           'field_links',
-          (SELECT COUNT(*) FROM truth_ledger_claude.field_links)
+          (SELECT COUNT(*) FROM truth_ledger.field_links)
       `;
 
       console.log('\nTable counts:');
@@ -167,14 +167,14 @@ async function showStatus() {
 
       // Show conflicts
       const conflicts = await sql`
-        SELECT COUNT(*) as count FROM truth_ledger_claude.conflict_groups
+        SELECT COUNT(*) as count FROM truth_ledger.conflict_groups
         WHERE conflict_present = true
       `;
       console.log(`\nActive conflicts: ${conflicts[0].count}`);
 
       // Show pending reviews
       const reviews = await sql`
-        SELECT COUNT(*) as count FROM truth_ledger_claude.review_queue
+        SELECT COUNT(*) as count FROM truth_ledger.review_queue
         WHERE status = 'pending'
       `;
       console.log(`Pending reviews: ${reviews[0].count}`);

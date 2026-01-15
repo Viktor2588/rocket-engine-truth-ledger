@@ -147,7 +147,7 @@ export class FactResolver {
         metadata,
         created_at as "createdAt",
         updated_at as "updatedAt"
-      FROM truth_ledger_claude.conflict_groups
+      FROM truth_ledger.conflict_groups
       WHERE claim_key_hash = ${claimKeyHash}
     `;
 
@@ -168,7 +168,7 @@ export class FactResolver {
           metadata,
           created_at as "createdAt",
           updated_at as "updatedAt"
-        FROM truth_ledger_claude.entities WHERE id = ${conflictGroup.entityId}
+        FROM truth_ledger.entities WHERE id = ${conflictGroup.entityId}
       `,
       sql<Attribute[]>`
         SELECT
@@ -182,7 +182,7 @@ export class FactResolver {
           tolerance_rel as "toleranceRel",
           metadata,
           created_at as "createdAt"
-        FROM truth_ledger_claude.attributes WHERE id = ${conflictGroup.attributeId}
+        FROM truth_ledger.attributes WHERE id = ${conflictGroup.attributeId}
       `,
     ]);
 
@@ -210,7 +210,7 @@ export class FactResolver {
 
     // Get field link
     const links = await sql<{ claim_key_hash: string }[]>`
-      SELECT claim_key_hash FROM truth_ledger_claude.field_links
+      SELECT claim_key_hash FROM truth_ledger.field_links
       WHERE entity_id = ${entityId} AND field_name = ${fieldName}
     `;
 
@@ -249,19 +249,19 @@ export class FactResolver {
     switch (entityType) {
       case 'engine':
         entities = await sql<Entity[]>`
-          SELECT ${sql.unsafe(entityColumns)} FROM truth_ledger_claude.entities
+          SELECT ${sql.unsafe(entityColumns)} FROM truth_ledger.entities
           WHERE engine_id = ${domainId}
         `;
         break;
       case 'launch_vehicle':
         entities = await sql<Entity[]>`
-          SELECT ${sql.unsafe(entityColumns)} FROM truth_ledger_claude.entities
+          SELECT ${sql.unsafe(entityColumns)} FROM truth_ledger.entities
           WHERE launch_vehicle_id = ${domainId}
         `;
         break;
       case 'country':
         entities = await sql<Entity[]>`
-          SELECT ${sql.unsafe(entityColumns)} FROM truth_ledger_claude.entities
+          SELECT ${sql.unsafe(entityColumns)} FROM truth_ledger.entities
           WHERE country_id = ${domainId}
         `;
         break;
@@ -302,7 +302,7 @@ export class FactResolver {
         metadata,
         created_at as "createdAt",
         updated_at as "updatedAt"
-      FROM truth_ledger_claude.claims
+      FROM truth_ledger.claims
       WHERE claim_key_hash = ${claimKeyHash}
       ORDER BY created_at ASC
     `;
@@ -324,7 +324,7 @@ export class FactResolver {
           specificity_score as "specificityScore",
           factors_json as "factorsJson",
           computed_at as "computedAt"
-        FROM truth_ledger_claude.truth_metrics
+        FROM truth_ledger.truth_metrics
         WHERE claim_id = ${claim.id}
       `;
 
@@ -352,10 +352,10 @@ export class FactResolver {
           e.quote,
           e.stance,
           e.extraction_confidence
-        FROM truth_ledger_claude.evidence e
-        JOIN truth_ledger_claude.snippets s ON s.id = e.snippet_id
-        JOIN truth_ledger_claude.documents d ON d.id = s.document_id
-        JOIN truth_ledger_claude.sources src ON src.id = d.source_id
+        FROM truth_ledger.evidence e
+        JOIN truth_ledger.snippets s ON s.id = e.snippet_id
+        JOIN truth_ledger.documents d ON d.id = s.document_id
+        JOIN truth_ledger.sources src ON src.id = d.source_id
         WHERE e.claim_id = ${claim.id}
         ORDER BY d.published_at DESC NULLS LAST
       `;
@@ -522,7 +522,7 @@ export class FactResolver {
         metadata,
         created_at as "createdAt",
         updated_at as "updatedAt"
-      FROM truth_ledger_claude.entities WHERE id = ${entityId}
+      FROM truth_ledger.entities WHERE id = ${entityId}
     `;
 
     if (entities.length === 0) {
@@ -536,7 +536,7 @@ export class FactResolver {
     // Get total count
     const countResult = await sql<[{ count: number }]>`
       SELECT COUNT(*)::int as count
-      FROM truth_ledger_claude.field_links
+      FROM truth_ledger.field_links
       WHERE entity_id = ${entityId}
         AND claim_key_hash IS NOT NULL
     `;
@@ -545,7 +545,7 @@ export class FactResolver {
     // Get paginated field links for this entity
     const fieldLinks = await sql<{ field_name: string; claim_key_hash: string }[]>`
       SELECT field_name, claim_key_hash
-      FROM truth_ledger_claude.field_links
+      FROM truth_ledger.field_links
       WHERE entity_id = ${entityId}
         AND claim_key_hash IS NOT NULL
       ORDER BY field_name

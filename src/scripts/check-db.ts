@@ -22,7 +22,7 @@ async function check() {
   const tables = await sql`
     SELECT table_name
     FROM information_schema.tables
-    WHERE table_schema = 'truth_ledger_claude'
+    WHERE table_schema = 'truth_ledger'
     ORDER BY table_name
   `;
   console.log(tables.map(t => t.table_name));
@@ -30,14 +30,14 @@ async function check() {
   // Check data counts
   console.log('\n=== Data Counts ===');
   const counts = await sql`
-    SELECT 'sources' as tbl, COUNT(*)::int as cnt FROM truth_ledger_claude.sources
-    UNION ALL SELECT 'documents', COUNT(*)::int FROM truth_ledger_claude.documents
-    UNION ALL SELECT 'snippets', COUNT(*)::int FROM truth_ledger_claude.snippets
-    UNION ALL SELECT 'entities', COUNT(*)::int FROM truth_ledger_claude.entities
-    UNION ALL SELECT 'claims', COUNT(*)::int FROM truth_ledger_claude.claims
-    UNION ALL SELECT 'evidence', COUNT(*)::int FROM truth_ledger_claude.evidence
-    UNION ALL SELECT 'conflict_groups', COUNT(*)::int FROM truth_ledger_claude.conflict_groups
-    UNION ALL SELECT 'truth_metrics', COUNT(*)::int FROM truth_ledger_claude.truth_metrics
+    SELECT 'sources' as tbl, COUNT(*)::int as cnt FROM truth_ledger.sources
+    UNION ALL SELECT 'documents', COUNT(*)::int FROM truth_ledger.documents
+    UNION ALL SELECT 'snippets', COUNT(*)::int FROM truth_ledger.snippets
+    UNION ALL SELECT 'entities', COUNT(*)::int FROM truth_ledger.entities
+    UNION ALL SELECT 'claims', COUNT(*)::int FROM truth_ledger.claims
+    UNION ALL SELECT 'evidence', COUNT(*)::int FROM truth_ledger.evidence
+    UNION ALL SELECT 'conflict_groups', COUNT(*)::int FROM truth_ledger.conflict_groups
+    UNION ALL SELECT 'truth_metrics', COUNT(*)::int FROM truth_ledger.truth_metrics
     ORDER BY tbl
   `;
   for (const row of counts) {
@@ -48,7 +48,7 @@ async function check() {
   console.log('\n=== Recent Sync Status ===');
   const syncs = await sql`
     SELECT sync_type, state, started_at, completed_at, records_synced, error_message
-    FROM truth_ledger_claude.sync_status
+    FROM truth_ledger.sync_status
     ORDER BY id DESC
     LIMIT 10
   `;

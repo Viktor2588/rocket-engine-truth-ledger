@@ -21,7 +21,7 @@ async function findExtractableSnippets() {
     SELECT
       id,
       canonical_name as "canonicalName"
-    FROM truth_ledger_claude.attributes
+    FROM truth_ledger.attributes
   `;
   const attributeMap = new Map<string, { canonicalName: string; id: string }>();
   for (const attr of attributes as unknown as { canonicalName: string; id: string }[]) {
@@ -37,8 +37,8 @@ async function findExtractableSnippets() {
   while (processed < 5000) {
     const snippets = await sql`
       SELECT s.id, s.text, s.snippet_type as "snippetType"
-      FROM truth_ledger_claude.snippets s
-      LEFT JOIN truth_ledger_claude.evidence e ON e.snippet_id = s.id
+      FROM truth_ledger.snippets s
+      LEFT JOIN truth_ledger.evidence e ON e.snippet_id = s.id
       WHERE e.id IS NULL
       ORDER BY s.created_at
       LIMIT ${batchSize} OFFSET ${offset}

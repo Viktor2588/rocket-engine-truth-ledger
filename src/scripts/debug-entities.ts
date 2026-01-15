@@ -17,7 +17,7 @@ async function debugEntities() {
 
   // Check loaded entities
   const entities = await sql`
-    SELECT canonical_name, aliases FROM truth_ledger_claude.entities
+    SELECT canonical_name, aliases FROM truth_ledger.entities
   `;
   console.log('Loaded entities:');
   for (const e of entities) {
@@ -52,7 +52,7 @@ async function debugEntities() {
 
   const matchingSnippets = await sql`
     SELECT id, text
-    FROM truth_ledger_claude.snippets
+    FROM truth_ledger.snippets
     WHERE text ~* ${entityNames}
     LIMIT 5
   `;

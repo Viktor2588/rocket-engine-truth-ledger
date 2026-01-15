@@ -106,7 +106,7 @@ async function seedEntities() {
     try {
       // Check if entity already exists
       const existing = await sql`
-        SELECT id FROM truth_ledger_claude.entities
+        SELECT id FROM truth_ledger.entities
         WHERE canonical_name = ${seed.canonicalName}
         LIMIT 1
       `;
@@ -119,7 +119,7 @@ async function seedEntities() {
 
       // Insert new entity
       const result = await sql`
-        INSERT INTO truth_ledger_claude.entities (
+        INSERT INTO truth_ledger.entities (
           entity_type,
           canonical_name,
           aliases
@@ -145,7 +145,7 @@ async function seedEntities() {
   // Show current counts
   const counts = await sql`
     SELECT entity_type, COUNT(*)::int as count
-    FROM truth_ledger_claude.entities
+    FROM truth_ledger.entities
     GROUP BY entity_type
     ORDER BY entity_type
   `;

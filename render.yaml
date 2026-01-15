@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: rocket-engine-truth-ledger
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      # CORS - allow backend to call this service
+      - key: CORS_ORIGIN
+        value: "*"
+      # DATABASE_URL should be set manually in Render dashboard
+      # Format: postgres://user:password@host:port/database?sslmode=require
+      # Can use same Neon database as backend or separate one
+      - key: DB_SSL
+        value: "true"
+      # Optional: ANTHROPIC_API_KEY for AI extraction features
+      # Set in Render dashboard if needed

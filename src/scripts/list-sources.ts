@@ -18,7 +18,7 @@ async function main() {
 
   const sources = await sql`
     SELECT *
-    FROM truth_ledger_claude.sources
+    FROM truth_ledger.sources
     ORDER BY source_type
   `;
 

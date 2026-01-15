@@ -48,3 +48,6 @@ export function getDatabaseUrl(): string {
   const sslParam = ssl ? '?sslmode=require' : '';
   return `postgres://${user}:${password}@${host}:${port}/${database}${sslParam}`;
 }
+
+// Schema name - configurable via environment variable
+export const SCHEMA = getEnvOrDefault('DB_SCHEMA', 'truth_ledger');

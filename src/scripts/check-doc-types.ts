@@ -18,7 +18,7 @@ async function main() {
   // Also check what's in the documents table
   const docs = await sql`
     SELECT doc_type, COUNT(*)::int as count
-    FROM truth_ledger_claude.documents
+    FROM truth_ledger.documents
     GROUP BY doc_type
   `;
 

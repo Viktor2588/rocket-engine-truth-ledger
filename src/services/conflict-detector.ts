@@ -165,7 +165,7 @@ export class ConflictDetector {
 
     if (config.conflictGroupIds && config.conflictGroupIds.length > 0) {
       return await sql<ConflictGroup[]>`
-        SELECT ${sql.unsafe(cgColumns)} FROM truth_ledger_claude.conflict_groups
+        SELECT ${sql.unsafe(cgColumns)} FROM truth_ledger.conflict_groups
         WHERE id = ANY(${config.conflictGroupIds})
         ORDER BY updated_at ASC
         LIMIT ${limit}
@@ -174,7 +174,7 @@ export class ConflictDetector {
 
     if (config.entityIds && config.entityIds.length > 0) {
       return await sql<ConflictGroup[]>`
-        SELECT ${sql.unsafe(cgColumns)} FROM truth_ledger_claude.conflict_groups
+        SELECT ${sql.unsafe(cgColumns)} FROM truth_ledger.conflict_groups
         WHERE entity_id = ANY(${config.entityIds})
         ORDER BY updated_at ASC
         LIMIT ${limit}
@@ -185,13 +185,13 @@ export class ConflictDetector {
     // or groups where status is still 'unknown'
     const query = config.forceRecheck
       ? sql<ConflictGroup[]>`
-          SELECT ${sql.unsafe(cgColumns)} FROM truth_ledger_claude.conflict_groups
+          SELECT ${sql.unsafe(cgColumns)} FROM truth_ledger.conflict_groups
           WHERE claim_count > 0
           ORDER BY updated_at ASC
           LIMIT ${limit}
         `
       : sql<ConflictGroup[]>`
-          SELECT ${sql.unsafe(cgColumns)} FROM truth_ledger_claude.conflict_groups
+          SELECT ${sql.unsafe(cgColumns)} FROM truth_ledger.conflict_groups
           WHERE status_factual = 'unknown'
             AND claim_count > 0
           ORDER BY created_at ASC
@@ -227,10 +227,10 @@ export class ConflictDetector {
         c.updated_at as "updatedAt",
         COUNT(e.id)::int as "evidenceCount",
         MAX(d.published_at) as "latestEvidenceDate"
-      FROM truth_ledger_claude.claims c
-      LEFT JOIN truth_ledger_claude.evidence e ON e.claim_id = c.id
-      LEFT JOIN truth_ledger_claude.snippets s ON s.id = e.snippet_id
-      LEFT JOIN truth_ledger_claude.documents d ON d.id = s.document_id
+      FROM truth_ledger.claims c
+      LEFT JOIN truth_ledger.evidence e ON e.claim_id = c.id
+      LEFT JOIN truth_ledger.snippets s ON s.id = e.snippet_id
+      LEFT JOIN truth_ledger.documents d ON d.id = s.document_id
       WHERE c.claim_key_hash = ${group.claimKeyHash}
       GROUP BY c.id
       ORDER BY COUNT(e.id) DESC, c.created_at ASC
@@ -258,7 +258,7 @@ export class ConflictDetector {
         tolerance_rel as "toleranceRel",
         metadata,
         created_at as "createdAt"
-      FROM truth_ledger_claude.attributes WHERE id = ${group.attributeId}
+      FROM truth_ledger.attributes WHERE id = ${group.attributeId}
     `;
     const attribute = attributes[0];
 
@@ -464,7 +464,7 @@ export class ConflictDetector {
     const sql = getConnection();
 
     await sql`
-      UPDATE truth_ledger_claude.conflict_groups
+      UPDATE truth_ledger.conflict_groups
       SET conflict_present = ${analysis.hasConflict},
           status_factual = ${analysis.recommendedStatus},
           metadata = COALESCE(metadata, '{}'::jsonb) || ${sql.json(analysis.details as postgres.JSONValue)}::jsonb,
@@ -480,7 +480,7 @@ export class ConflictDetector {
     const sql = getConnection();
 
     await sql`
-      INSERT INTO truth_ledger_claude.review_queue (
+      INSERT INTO truth_ledger.review_queue (
         item_type,
         item_id,
         reason,
@@ -521,7 +521,7 @@ export class ConflictDetector {
         metadata,
         created_at as "createdAt",
         updated_at as "updatedAt"
-      FROM truth_ledger_claude.conflict_groups
+      FROM truth_ledger.conflict_groups
       WHERE entity_id = ${entityId}
       ORDER BY conflict_present DESC, claim_count DESC
     `;

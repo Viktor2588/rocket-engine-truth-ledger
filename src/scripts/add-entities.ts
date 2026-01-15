@@ -123,7 +123,7 @@ async function addEntities() {
   for (const entity of allEntities) {
     // Check if entity already exists
     const existing = await sql`
-      SELECT id FROM truth_ledger_claude.entities
+      SELECT id FROM truth_ledger.entities
       WHERE LOWER(canonical_name) = ${entity.canonicalName.toLowerCase()}
     `;
 
@@ -135,7 +135,7 @@ async function addEntities() {
 
     // Insert new entity
     await sql`
-      INSERT INTO truth_ledger_claude.entities (
+      INSERT INTO truth_ledger.entities (
         canonical_name, entity_type, aliases
       ) VALUES (
         ${entity.canonicalName},
@@ -151,7 +151,7 @@ async function addEntities() {
   console.log(`\nDone! Added ${added} new entities, skipped ${skipped} existing.`);
 
   // Show total count
-  const total = await sql`SELECT COUNT(*) as cnt FROM truth_ledger_claude.entities`;
+  const total = await sql`SELECT COUNT(*) as cnt FROM truth_ledger.entities`;
   console.log(`Total entities in database: ${total[0].cnt}`);
 
   await sql.end();

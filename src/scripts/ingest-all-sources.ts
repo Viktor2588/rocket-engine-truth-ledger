@@ -31,7 +31,7 @@ async function ingestAllSources() {
   // Get all active sources
   const sources = await sql<Source[]>`
     SELECT id, name, source_type, base_trust, default_doc_type
-    FROM truth_ledger_claude.sources
+    FROM truth_ledger.sources
     WHERE is_active = true
     ORDER BY base_trust DESC, name
   `;
@@ -62,7 +62,7 @@ async function ingestAllSources() {
     // Get active URLs for this source
     const urls = await sql<SourceUrl[]>`
       SELECT id, url, last_fetched_at
-      FROM truth_ledger_claude.source_urls
+      FROM truth_ledger.source_urls
       WHERE source_id = ${source.id} AND is_active = true
       ORDER BY last_fetched_at ASC NULLS FIRST
     `;
@@ -108,7 +108,7 @@ async function ingestAllSources() {
 
       // Update last_fetched_at for processed URLs
       await sql`
-        UPDATE truth_ledger_claude.source_urls
+        UPDATE truth_ledger.source_urls
         SET last_fetched_at = NOW()
         WHERE source_id = ${source.id} AND is_active = true
       `;
@@ -134,11 +134,11 @@ async function ingestAllSources() {
   // Database totals
   const counts = await sql`
     SELECT
-      (SELECT COUNT(*)::int FROM truth_ledger_claude.sources WHERE is_active = true) as sources,
-      (SELECT COUNT(*)::int FROM truth_ledger_claude.source_urls WHERE is_active = true) as urls,
-      (SELECT COUNT(*)::int FROM truth_ledger_claude.documents) as documents,
-      (SELECT COUNT(*)::int FROM truth_ledger_claude.snippets) as snippets,
-      (SELECT COUNT(*)::int FROM truth_ledger_claude.snippets WHERE processing_status = 'pending') as pending_snippets
+      (SELECT COUNT(*)::int FROM truth_ledger.sources WHERE is_active = true) as sources,
+      (SELECT COUNT(*)::int FROM truth_ledger.source_urls WHERE is_active = true) as urls,
+      (SELECT COUNT(*)::int FROM truth_ledger.documents) as documents,
+      (SELECT COUNT(*)::int FROM truth_ledger.snippets) as snippets,
+      (SELECT COUNT(*)::int FROM truth_ledger.snippets WHERE processing_status = 'pending') as pending_snippets
   `;
 
   console.log('\n📋 Database Totals:');

@@ -14,10 +14,10 @@ async function runExtraction() {
 
   // Show current state
   const snippetCount = await sql`
-    SELECT COUNT(*)::int as count FROM truth_ledger_claude.snippets
+    SELECT COUNT(*)::int as count FROM truth_ledger.snippets
   `;
   const claimCount = await sql`
-    SELECT COUNT(*)::int as count FROM truth_ledger_claude.claims
+    SELECT COUNT(*)::int as count FROM truth_ledger.claims
   `;
 
   console.log('Before extraction:');
@@ -50,13 +50,13 @@ async function runExtraction() {
 
   // Show after state
   const newClaimCount = await sql`
-    SELECT COUNT(*)::int as count FROM truth_ledger_claude.claims
+    SELECT COUNT(*)::int as count FROM truth_ledger.claims
   `;
   const evidenceCount = await sql`
-    SELECT COUNT(*)::int as count FROM truth_ledger_claude.evidence
+    SELECT COUNT(*)::int as count FROM truth_ledger.evidence
   `;
   const conflictCount = await sql`
-    SELECT COUNT(*)::int as count FROM truth_ledger_claude.conflict_groups
+    SELECT COUNT(*)::int as count FROM truth_ledger.conflict_groups
   `;
 
   console.log('\n📊 Database counts after extraction:');
@@ -71,9 +71,9 @@ async function runExtraction() {
       a.display_name as attribute,
       c.value_json,
       c.unit
-    FROM truth_ledger_claude.claims c
-    JOIN truth_ledger_claude.entities e ON c.entity_id = e.id
-    JOIN truth_ledger_claude.attributes a ON c.attribute_id = a.id
+    FROM truth_ledger.claims c
+    JOIN truth_ledger.entities e ON c.entity_id = e.id
+    JOIN truth_ledger.attributes a ON c.attribute_id = a.id
     ORDER BY e.entity_type, e.canonical_name
     LIMIT 20
   `;

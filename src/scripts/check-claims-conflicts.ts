@@ -33,7 +33,7 @@ async function main() {
 
   // Sample conflict groups
   const cgs = await sql`
-    SELECT * FROM truth_ledger_claude.conflict_groups LIMIT 3
+    SELECT * FROM truth_ledger.conflict_groups LIMIT 3
   `;
   console.log('\nSample conflict groups:');
   for (const cg of cgs) {
@@ -44,8 +44,8 @@ async function main() {
   const claimsWithCg = await sql`
     SELECT c.id, c.claim_key_hash, c.entity_id, c.attribute_id,
            cg.id as conflict_group_id
-    FROM truth_ledger_claude.claims c
-    LEFT JOIN truth_ledger_claude.conflict_groups cg ON c.claim_key_hash = cg.claim_key_hash
+    FROM truth_ledger.claims c
+    LEFT JOIN truth_ledger.conflict_groups cg ON c.claim_key_hash = cg.claim_key_hash
     LIMIT 5
   `;
   console.log('\nClaims with conflict groups:');
@@ -56,8 +56,8 @@ async function main() {
   // Count claims without conflict groups
   const missing = await sql`
     SELECT COUNT(*)::int as count
-    FROM truth_ledger_claude.claims c
-    LEFT JOIN truth_ledger_claude.conflict_groups cg ON c.claim_key_hash = cg.claim_key_hash
+    FROM truth_ledger.claims c
+    LEFT JOIN truth_ledger.conflict_groups cg ON c.claim_key_hash = cg.claim_key_hash
     WHERE cg.id IS NULL
   `;
   console.log(`\nClaims without conflict groups: ${missing[0].count}`);
