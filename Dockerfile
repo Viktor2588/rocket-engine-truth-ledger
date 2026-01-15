@@ -1,6 +1,5 @@
-# Hugging Face Spaces Dockerfile
-# CPU-only API server - serves verified facts from database
-# AI extraction runs locally with Ollama, results sync to shared DB
+# Truth Ledger API Server
+# Serves verified facts from database
 
 # Build stage
 FROM node:20-slim AS builder
@@ -18,23 +17,17 @@ WORKDIR /app
 
 # Copy package files and install production dependencies
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 
 # Copy built application from builder
 COPY --from=builder /build/dist ./dist
 
-# Create non-root user (required by HF Spaces)
-RUN useradd -m -u 1000 user
-RUN chown -R user:user /app
-
-USER user
-
 # Environment variables
 ENV NODE_ENV=production
-ENV PORT=7860
+ENV PORT=10000
 
-# HF Spaces uses port 7860
-EXPOSE 7860
+# Render uses port 10000 by default
+EXPOSE 10000
 
 # Start the API server
 CMD ["node", "dist/index.js", "serve"]
