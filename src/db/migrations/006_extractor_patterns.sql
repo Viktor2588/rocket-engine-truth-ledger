@@ -2,10 +2,10 @@
 -- This allows users to add/edit extraction patterns without code changes
 
 -- Ensure schema exists
-CREATE SCHEMA IF NOT EXISTS truth_ledger_claude;
+CREATE SCHEMA IF NOT EXISTS truth_ledger;
 
 -- Create extractor_patterns table
-CREATE TABLE IF NOT EXISTS truth_ledger_claude.extractor_patterns (
+CREATE TABLE IF NOT EXISTS truth_ledger.extractor_patterns (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(100) NOT NULL,
   description TEXT,
@@ -21,12 +21,12 @@ CREATE TABLE IF NOT EXISTS truth_ledger_claude.extractor_patterns (
 );
 
 -- Create indexes
-CREATE INDEX IF NOT EXISTS idx_extractor_patterns_attribute ON truth_ledger_claude.extractor_patterns(attribute_pattern);
-CREATE INDEX IF NOT EXISTS idx_extractor_patterns_active ON truth_ledger_claude.extractor_patterns(is_active);
-CREATE INDEX IF NOT EXISTS idx_extractor_patterns_entity_type ON truth_ledger_claude.extractor_patterns(entity_type);
+CREATE INDEX IF NOT EXISTS idx_extractor_patterns_attribute ON truth_ledger.extractor_patterns(attribute_pattern);
+CREATE INDEX IF NOT EXISTS idx_extractor_patterns_active ON truth_ledger.extractor_patterns(is_active);
+CREATE INDEX IF NOT EXISTS idx_extractor_patterns_entity_type ON truth_ledger.extractor_patterns(entity_type);
 
 -- Insert default patterns (matching current hardcoded extractors)
-INSERT INTO truth_ledger_claude.extractor_patterns (name, description, attribute_pattern, entity_type, patterns, target_unit, unit_conversions, priority) VALUES
+INSERT INTO truth_ledger.extractor_patterns (name, description, attribute_pattern, entity_type, patterns, target_unit, unit_conversions, priority) VALUES
 -- ISP Extractor
 ('ISP Extractor', 'Extracts specific impulse (ISP) values in seconds', 'engines.isp_s', 'engine',
  '[
@@ -150,8 +150,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS extractor_patterns_updated_at ON truth_ledger_claude.extractor_patterns;
+DROP TRIGGER IF EXISTS extractor_patterns_updated_at ON truth_ledger.extractor_patterns;
 CREATE TRIGGER extractor_patterns_updated_at
-  BEFORE UPDATE ON truth_ledger_claude.extractor_patterns
+  BEFORE UPDATE ON truth_ledger.extractor_patterns
   FOR EACH ROW
   EXECUTE FUNCTION update_extractor_patterns_updated_at();

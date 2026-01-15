@@ -499,6 +499,450 @@ export const GROUND_TRUTH: GroundTruthValue[] = [
     source: 'Rocket Lab official',
     tolerance: 0.10,
   },
+
+  // ========================================
+  // Launch Vehicles - Payload to LEO
+  // ========================================
+
+  // SpaceX
+  {
+    entityName: 'Falcon 9 Block 5',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 22800,
+    unit: 'kg',
+    scope: {},
+    source: 'SpaceX official',
+    tolerance: 0.05,
+  },
+  {
+    entityName: 'Falcon Heavy',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 63800,
+    unit: 'kg',
+    scope: {},
+    source: 'SpaceX official',
+    tolerance: 0.05,
+  },
+  {
+    entityName: 'Starship Block 3',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 200000,
+    unit: 'kg',
+    scope: {},
+    source: 'SpaceX estimates (2024)',
+    tolerance: 0.15,
+  },
+
+  // NASA SLS
+  {
+    entityName: 'SLS Block 1',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 95000,
+    unit: 'kg',
+    scope: {},
+    source: 'NASA official',
+    tolerance: 0.05,
+  },
+  {
+    entityName: 'SLS Block 2',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 130000,
+    unit: 'kg',
+    scope: {},
+    source: 'NASA official',
+    tolerance: 0.10,
+  },
+
+  // Blue Origin
+  {
+    entityName: 'New Glenn',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 45000,
+    unit: 'kg',
+    scope: {},
+    source: 'Blue Origin official',
+    tolerance: 0.05,
+  },
+
+  // ULA
+  {
+    entityName: 'Vulcan Centaur',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 27200,
+    unit: 'kg',
+    scope: {},
+    source: 'ULA official',
+    tolerance: 0.05,
+  },
+  {
+    entityName: 'Atlas V',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 18850,
+    unit: 'kg',
+    scope: {},
+    source: 'ULA official',
+    tolerance: 0.05,
+  },
+
+  // Rocket Lab
+  {
+    entityName: 'Electron',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 300,
+    unit: 'kg',
+    scope: {},
+    source: 'Rocket Lab official',
+    tolerance: 0.05,
+  },
+  {
+    entityName: 'Neutron',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 13000,
+    unit: 'kg',
+    scope: {},
+    source: 'Rocket Lab official',
+    tolerance: 0.10,
+  },
+
+  // Russia
+  {
+    entityName: 'Soyuz-2.1b',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 8200,
+    unit: 'kg',
+    scope: {},
+    source: 'Roscosmos official',
+    tolerance: 0.05,
+  },
+  {
+    entityName: 'Angara A5',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 24500,
+    unit: 'kg',
+    scope: {},
+    source: 'Khrunichev official',
+    tolerance: 0.05,
+  },
+  {
+    entityName: 'Long March 9',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 150000,
+    unit: 'kg',
+    scope: {},
+    source: 'CALT official (2024)',
+    tolerance: 0.10,
+  },
+
+  // China
+  {
+    entityName: 'Long March 5',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 25000,
+    unit: 'kg',
+    scope: {},
+    source: 'CALT official',
+    tolerance: 0.05,
+  },
+  {
+    entityName: 'Long March 10',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 70000,
+    unit: 'kg',
+    scope: {},
+    source: 'CALT official (2024)',
+    tolerance: 0.10,
+  },
+  {
+    entityName: 'Zhuque-3',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 21000,
+    unit: 'kg',
+    scope: {},
+    source: 'Landspace official (2025)',
+    tolerance: 0.10,
+  },
+  {
+    entityName: 'Tianlong-3',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 22000,
+    unit: 'kg',
+    scope: {},
+    source: 'Space Pioneer official (2025)',
+    tolerance: 0.10,
+  },
+
+  // Europe
+  {
+    entityName: 'Ariane 64',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 21500,
+    unit: 'kg',
+    scope: {},
+    source: 'ArianeGroup official',
+    tolerance: 0.05,
+  },
+
+  // Japan
+  {
+    entityName: 'H3-24',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 22000,
+    unit: 'kg',
+    scope: {},
+    source: 'JAXA official',
+    tolerance: 0.10,
+  },
+
+  // India
+  {
+    entityName: 'LVM3',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 10000,
+    unit: 'kg',
+    scope: {},
+    source: 'ISRO official',
+    tolerance: 0.05,
+  },
+  {
+    entityName: 'NGLV',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 30000,
+    unit: 'kg',
+    scope: {},
+    source: 'ISRO official (2024)',
+    tolerance: 0.10,
+  },
+
+  // Korea
+  {
+    entityName: 'Nuri',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 2600,
+    unit: 'kg',
+    scope: {},
+    source: 'KARI official',
+    tolerance: 0.05,
+  },
+  {
+    entityName: 'KSLV-III',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 10000,
+    unit: 'kg',
+    scope: {},
+    source: 'KARI official (2024)',
+    tolerance: 0.10,
+  },
+
+  // ========================================
+  // US New Space
+  // ========================================
+  {
+    entityName: 'Terran R',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 23500,
+    unit: 'kg',
+    scope: {},
+    source: 'Relativity Space official (2024)',
+    tolerance: 0.10,
+  },
+  {
+    entityName: 'Firefly Alpha',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 1030,
+    unit: 'kg',
+    scope: {},
+    source: 'Firefly Aerospace official',
+    tolerance: 0.05,
+  },
+  {
+    entityName: 'Firefly MLV',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 10000,
+    unit: 'kg',
+    scope: {},
+    source: 'Firefly Aerospace official (2024)',
+    tolerance: 0.10,
+  },
+  {
+    entityName: 'Stoke Nova',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 5000,
+    unit: 'kg',
+    scope: {},
+    source: 'Stoke Space official (2024)',
+    tolerance: 0.15,
+  },
+
+  // Northrop Grumman
+  {
+    entityName: 'Antares 330',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 8500,
+    unit: 'kg',
+    scope: {},
+    source: 'Northrop Grumman official',
+    tolerance: 0.05,
+  },
+  {
+    entityName: 'Minotaur IV',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 1730,
+    unit: 'kg',
+    scope: {},
+    source: 'Northrop Grumman official',
+    tolerance: 0.05,
+  },
+  {
+    entityName: 'Pegasus XL',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 443,
+    unit: 'kg',
+    scope: {},
+    source: 'Northrop Grumman official',
+    tolerance: 0.05,
+  },
+
+  // ========================================
+  // European New Space
+  // ========================================
+  {
+    entityName: 'Spectrum',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 1000,
+    unit: 'kg',
+    scope: {},
+    source: 'Isar Aerospace official',
+    tolerance: 0.10,
+  },
+  {
+    entityName: 'RFA One',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 1300,
+    unit: 'kg',
+    scope: {},
+    source: 'Rocket Factory Augsburg official',
+    tolerance: 0.10,
+  },
+  {
+    entityName: 'Prime',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 180,
+    unit: 'kg',
+    scope: {},
+    source: 'Orbex official',
+    tolerance: 0.10,
+  },
+  {
+    entityName: 'Miura 5',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 450,
+    unit: 'kg',
+    scope: {},
+    source: 'PLD Space official',
+    tolerance: 0.10,
+  },
+  {
+    entityName: 'Skyrora XL',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 315,
+    unit: 'kg',
+    scope: {},
+    source: 'Skyrora official',
+    tolerance: 0.10,
+  },
+  {
+    entityName: 'Vega-E',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 3000,
+    unit: 'kg',
+    scope: {},
+    source: 'Avio official (2024)',
+    tolerance: 0.10,
+  },
+  {
+    entityName: 'Maia',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 500,
+    unit: 'kg',
+    scope: {},
+    source: 'Maia Space official (2024)',
+    tolerance: 0.15,
+  },
+
+  // ========================================
+  // Additional Russia
+  // ========================================
+  {
+    entityName: 'Proton-M',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 23000,
+    unit: 'kg',
+    scope: {},
+    source: 'Khrunichev official',
+    tolerance: 0.05,
+  },
+  {
+    entityName: 'Soyuz-5',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 17000,
+    unit: 'kg',
+    scope: {},
+    source: 'Roscosmos official (2024)',
+    tolerance: 0.10,
+  },
+
+  // ========================================
+  // Additional China Private
+  // ========================================
+  {
+    entityName: 'Gravity-1',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 6500,
+    unit: 'kg',
+    scope: {},
+    source: 'OrienSpace official',
+    tolerance: 0.05,
+  },
+  {
+    entityName: 'Ceres-1',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 400,
+    unit: 'kg',
+    scope: {},
+    source: 'Galactic Energy official',
+    tolerance: 0.05,
+  },
+  {
+    entityName: 'Hyperbola-2',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 1900,
+    unit: 'kg',
+    scope: {},
+    source: 'iSpace official (2024)',
+    tolerance: 0.10,
+  },
+
+  // ========================================
+  // Japan / Australia
+  // ========================================
+  {
+    entityName: 'Epsilon',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 1500,
+    unit: 'kg',
+    scope: {},
+    source: 'JAXA official',
+    tolerance: 0.05,
+  },
+  {
+    entityName: 'Eris',
+    attributeName: 'launch_vehicles.payload_to_leo_kg',
+    value: 300,
+    unit: 'kg',
+    scope: {},
+    source: 'Gilmour Space official (2024)',
+    tolerance: 0.15,
+  },
 ];
 
 /**
