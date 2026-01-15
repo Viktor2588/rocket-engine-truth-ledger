@@ -7,46 +7,31 @@ sdk: docker
 app_port: 7860
 pinned: false
 license: mit
-suggested_hardware: t4-small
 ---
 
-# Rocket Engine Truth Ledger
+# Rocket Engine Truth Ledger API
 
-A fact-verification service for aerospace data powered by local LLM (granite3.3:8b via Ollama).
+Read-only API serving verified aerospace facts from the Truth Ledger database.
+
+## Architecture
+
+- **This Space**: CPU-only API server (serves facts)
+- **Local**: Ollama + granite3.3:8b for AI extraction
+- **Database**: Shared Neon PostgreSQL
+
+```
+Local (Ollama + AI) ──writes──▶ Neon DB ◀──reads── This API
+```
 
 ## API Endpoints
-
-Base URL: `https://YOUR-USERNAME-rocket-engine-truth-ledger.hf.space`
 
 | Endpoint | Description |
 |----------|-------------|
 | `GET /api/v1/health` | Health check |
 | `GET /api/v1/entities` | List entities |
 | `GET /api/v1/entities/:entityId/facts` | Get facts for entity |
-| `GET /api/v1/facts/:claimKeyHash` | Resolve fact by hash |
+| `GET /api/v1/entities/:type/:domainId/field/:fieldName` | Get specific field fact |
 | `GET /api/v1/conflict-groups` | List conflicts |
-
-## Environment Variables
-
-Set these in Space settings → Variables:
-- `DATABASE_URL` - Neon PostgreSQL connection string (required)
-
-## Architecture
-
-```
-┌─────────────────────────────────────┐
-│  Hugging Face Space (T4 GPU)       │
-│  ┌─────────────────────────────┐   │
-│  │  Truth Ledger API           │   │
-│  │  Port 7860                  │   │
-│  └──────────────┬──────────────┘   │
-│                 │                   │
-│  ┌──────────────▼──────────────┐   │
-│  │  Ollama + granite3.3:8b     │   │
-│  │  Port 11434                 │   │
-│  └─────────────────────────────┘   │
-└─────────────────────────────────────┘
-```
 
 ## Usage
 
@@ -55,5 +40,10 @@ Set these in Space settings → Variables:
 curl https://YOUR-SPACE.hf.space/api/v1/health
 
 # Get engine facts
-curl https://YOUR-SPACE.hf.space/api/v1/entities/engine/1/facts
+curl "https://YOUR-SPACE.hf.space/api/v1/entities/engine/1/field/engines.thrust_n"
 ```
+
+## Environment Variables
+
+Set in Space Settings → Variables:
+- `DATABASE_URL` - Neon PostgreSQL connection string (required)
