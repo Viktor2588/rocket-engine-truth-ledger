@@ -105,7 +105,7 @@ async function getSampleSnippets(config: BenchmarkConfig): Promise<Snippet[]> {
     // Filter by specific entities
     snippets = await sql<Snippet[]>`
       SELECT s.*
-      FROM truth_ledger.snippets s
+      FROM truth_ledger_claude.snippets s
       WHERE s.text ILIKE ANY(${config.entityFilter.map(e => `%${e}%`)})
       ${orderBy}
       LIMIT ${limit}
@@ -114,7 +114,7 @@ async function getSampleSnippets(config: BenchmarkConfig): Promise<Snippet[]> {
     // Try to get snippets with ground truth entities first
     snippets = await sql<Snippet[]>`
       SELECT s.*
-      FROM truth_ledger.snippets s
+      FROM truth_ledger_claude.snippets s
       WHERE s.text ILIKE ANY(${groundTruthEntities.map(e => `%${e}%`)})
       ${orderBy}
       LIMIT ${limit}
@@ -124,7 +124,7 @@ async function getSampleSnippets(config: BenchmarkConfig): Promise<Snippet[]> {
     if (snippets.length < limit) {
       const more = await sql<Snippet[]>`
         SELECT s.*
-        FROM truth_ledger.snippets s
+        FROM truth_ledger_claude.snippets s
         WHERE s.id NOT IN (${snippets.length > 0 ? sql`${snippets.map(s => s.id)}` : sql`''`})
         ${orderBy}
         LIMIT ${limit - snippets.length}

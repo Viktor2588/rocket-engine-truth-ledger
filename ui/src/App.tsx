@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { TruthSliderProvider } from '@/context/TruthSliderContext';
+import { BackendStatusProvider } from '@/context/BackendStatusContext';
+import { BackendStatusIndicator } from '@/components/BackendStatusIndicator';
 import { Layout } from '@/components/layout/Layout';
 import { Dashboard } from '@/pages/Dashboard';
 import { Entities } from '@/pages/Entities';
@@ -27,23 +29,26 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <TruthSliderProvider>
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<Layout />}>
-                <Route index element={<Dashboard />} />
-                <Route path="entities" element={<Entities />} />
-                <Route path="entities/:id" element={<EntityDetail />} />
-                <Route path="conflicts" element={<Conflicts />} />
-                <Route path="conflicts/:id" element={<ConflictDetail />} />
-                <Route path="review" element={<ReviewQueue />} />
-                <Route path="pipeline" element={<Pipeline />} />
-                <Route path="sources" element={<Sources />} />
-                <Route path="configuration" element={<Configuration />} />
-              </Route>
-            </Routes>
-          </BrowserRouter>
-        </TruthSliderProvider>
+        <BackendStatusProvider>
+          <TruthSliderProvider>
+            <BackendStatusIndicator />
+            <BrowserRouter>
+              <Routes>
+                <Route path="/" element={<Layout />}>
+                  <Route index element={<Dashboard />} />
+                  <Route path="entities" element={<Entities />} />
+                  <Route path="entities/:id" element={<EntityDetail />} />
+                  <Route path="conflicts" element={<Conflicts />} />
+                  <Route path="conflicts/:id" element={<ConflictDetail />} />
+                  <Route path="review" element={<ReviewQueue />} />
+                  <Route path="pipeline" element={<Pipeline />} />
+                  <Route path="sources" element={<Sources />} />
+                  <Route path="configuration" element={<Configuration />} />
+                </Route>
+              </Routes>
+            </BrowserRouter>
+          </TruthSliderProvider>
+        </BackendStatusProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

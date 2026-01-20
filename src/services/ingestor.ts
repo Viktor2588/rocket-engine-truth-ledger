@@ -340,7 +340,7 @@ export class Ingestor {
     try {
       // Verify source exists
       const sources = await sql<Source[]>`
-        SELECT * FROM truth_ledger.sources WHERE id = ${config.sourceId}
+        SELECT * FROM truth_ledger_claude.sources WHERE id = ${config.sourceId}
       `;
 
       if (sources.length === 0) {
@@ -409,7 +409,7 @@ export class Ingestor {
     return await transaction(async (sql) => {
       // Check if document with same source and hash already exists
       const existing = await sql<Document[]>`
-        SELECT id, content_hash FROM truth_ledger.documents
+        SELECT id, content_hash FROM truth_ledger_claude.documents
         WHERE source_id = ${source.id} AND content_hash = ${contentHash}
       `;
 
@@ -420,7 +420,7 @@ export class Ingestor {
 
       // Check if there's a previous version (same URL, different hash)
       const previousVersions = await sql<Document[]>`
-        SELECT id FROM truth_ledger.documents
+        SELECT id FROM truth_ledger_claude.documents
         WHERE source_id = ${source.id} AND url = ${url}
         ORDER BY created_at DESC
         LIMIT 1
@@ -430,7 +430,7 @@ export class Ingestor {
 
       // Insert new document
       const insertedDocs = await sql<Document[]>`
-        INSERT INTO truth_ledger.documents (
+        INSERT INTO truth_ledger_claude.documents (
           source_id,
           title,
           url,
@@ -470,7 +470,7 @@ export class Ingestor {
 
         // Insert snippet (ignore duplicates)
         const inserted = await sql<Snippet[]>`
-          INSERT INTO truth_ledger.snippets (
+          INSERT INTO truth_ledger_claude.snippets (
             document_id,
             locator,
             text,
@@ -511,9 +511,9 @@ export class Ingestor {
     // Documents that have snippets but no claims yet
     return await sql<Document[]>`
       SELECT DISTINCT d.*
-      FROM truth_ledger.documents d
-      JOIN truth_ledger.snippets s ON s.document_id = d.id
-      LEFT JOIN truth_ledger.evidence e ON e.snippet_id = s.id
+      FROM truth_ledger_claude.documents d
+      JOIN truth_ledger_claude.snippets s ON s.document_id = d.id
+      LEFT JOIN truth_ledger_claude.evidence e ON e.snippet_id = s.id
       WHERE e.id IS NULL
       ORDER BY d.created_at ASC
       LIMIT ${limit}
@@ -533,7 +533,7 @@ export class SourceManager {
     const sql = getConnection();
 
     const result = await sql<Source[]>`
-      INSERT INTO truth_ledger.sources (
+      INSERT INTO truth_ledger_claude.sources (
         name,
         source_type,
         base_url,
@@ -579,7 +579,7 @@ export class SourceManager {
   static async createSource(input: CreateSourceInput): Promise<Source> {
     const sql = getConnection();
     const result = await sql<Source[]>`
-      INSERT INTO truth_ledger.sources (
+      INSERT INTO truth_ledger_claude.sources (
         name, source_type, base_url, base_trust, independence_cluster_id,
         description, default_doc_type, is_active, tags
       ) VALUES (
@@ -604,7 +604,7 @@ export class SourceManager {
   static async updateSource(id: string, input: UpdateSourceInput): Promise<Source | null> {
     const sql = getConnection();
     const result = await sql<Source[]>`
-      UPDATE truth_ledger.sources SET
+      UPDATE truth_ledger_claude.sources SET
         name = COALESCE(${input.name ?? null}, name),
         source_type = COALESCE(${input.sourceType ?? null}, source_type),
         base_url = CASE WHEN ${input.baseUrl !== undefined} THEN ${input.baseUrl ?? null} ELSE base_url END,
@@ -627,7 +627,7 @@ export class SourceManager {
   static async deleteSource(id: string): Promise<boolean> {
     const sql = getConnection();
     const result = await sql`
-      DELETE FROM truth_ledger.sources WHERE id = ${id}
+      DELETE FROM truth_ledger_claude.sources WHERE id = ${id}
     `;
     return result.count > 0;
   }
@@ -638,7 +638,7 @@ export class SourceManager {
   static async toggleSource(id: string): Promise<Source | null> {
     const sql = getConnection();
     const result = await sql<Source[]>`
-      UPDATE truth_ledger.sources SET
+      UPDATE truth_ledger_claude.sources SET
         is_active = NOT is_active,
         updated_at = NOW()
       WHERE id = ${id}
@@ -653,7 +653,7 @@ export class SourceManager {
   static async getSources(filters?: { isActive?: boolean; type?: string }): Promise<Source[]> {
     const sql = getConnection();
     const sources = await sql<Source[]>`
-      SELECT * FROM truth_ledger.sources
+      SELECT * FROM truth_ledger_claude.sources
       WHERE (${filters?.isActive ?? null}::boolean IS NULL OR is_active = ${filters?.isActive ?? null})
         AND (${filters?.type ?? null}::text IS NULL OR source_type = ${filters?.type ?? null})
       ORDER BY name
@@ -674,7 +674,7 @@ export class SourceManager {
   static async getSource(id: string): Promise<Source | null> {
     const sql = getConnection();
     const result = await sql<Source[]>`
-      SELECT * FROM truth_ledger.sources WHERE id = ${id}
+      SELECT * FROM truth_ledger_claude.sources WHERE id = ${id}
     `;
     if (!result[0]) return null;
 
@@ -694,7 +694,7 @@ export class SourceManager {
   static async getFeeds(sourceId: string): Promise<SourceFeed[]> {
     const sql = getConnection();
     return await sql<SourceFeed[]>`
-      SELECT * FROM truth_ledger.source_feeds
+      SELECT * FROM truth_ledger_claude.source_feeds
       WHERE source_id = ${sourceId}
       ORDER BY created_at
     `;
@@ -706,7 +706,7 @@ export class SourceManager {
   static async createFeed(sourceId: string, input: CreateFeedInput): Promise<SourceFeed> {
     const sql = getConnection();
     const result = await sql<SourceFeed[]>`
-      INSERT INTO truth_ledger.source_feeds (
+      INSERT INTO truth_ledger_claude.source_feeds (
         source_id, feed_url, feed_type, refresh_interval_minutes, max_items, is_active
       ) VALUES (
         ${sourceId},
@@ -727,7 +727,7 @@ export class SourceManager {
   static async updateFeed(id: string, input: UpdateFeedInput): Promise<SourceFeed | null> {
     const sql = getConnection();
     const result = await sql<SourceFeed[]>`
-      UPDATE truth_ledger.source_feeds SET
+      UPDATE truth_ledger_claude.source_feeds SET
         feed_url = COALESCE(${input.feedUrl ?? null}, feed_url),
         feed_type = COALESCE(${input.feedType ?? null}, feed_type),
         refresh_interval_minutes = COALESCE(${input.refreshIntervalMinutes ?? null}, refresh_interval_minutes),
@@ -746,7 +746,7 @@ export class SourceManager {
   static async deleteFeed(id: string): Promise<boolean> {
     const sql = getConnection();
     const result = await sql`
-      DELETE FROM truth_ledger.source_feeds WHERE id = ${id}
+      DELETE FROM truth_ledger_claude.source_feeds WHERE id = ${id}
     `;
     return result.count > 0;
   }
@@ -757,7 +757,7 @@ export class SourceManager {
   static async toggleFeed(id: string): Promise<SourceFeed | null> {
     const sql = getConnection();
     const result = await sql<SourceFeed[]>`
-      UPDATE truth_ledger.source_feeds SET
+      UPDATE truth_ledger_claude.source_feeds SET
         is_active = NOT is_active,
         updated_at = NOW()
       WHERE id = ${id}
@@ -789,8 +789,8 @@ export class SourceManager {
         s.name as "sourceName",
         s.base_trust as "baseTrust",
         s.default_doc_type as "defaultDocType"
-      FROM truth_ledger.source_feeds f
-      JOIN truth_ledger.sources s ON s.id = f.source_id
+      FROM truth_ledger_claude.source_feeds f
+      JOIN truth_ledger_claude.sources s ON s.id = f.source_id
       WHERE f.is_active = true AND s.is_active = true
       ORDER BY f.refresh_interval_minutes, f.last_fetched_at NULLS FIRST
     `;
@@ -803,7 +803,7 @@ export class SourceManager {
     const sql = getConnection();
     if (success) {
       await sql`
-        UPDATE truth_ledger.source_feeds SET
+        UPDATE truth_ledger_claude.source_feeds SET
           last_fetched_at = NOW(),
           last_error = NULL,
           error_count = 0,
@@ -812,7 +812,7 @@ export class SourceManager {
       `;
     } else {
       await sql`
-        UPDATE truth_ledger.source_feeds SET
+        UPDATE truth_ledger_claude.source_feeds SET
           last_error = ${error ?? 'Unknown error'},
           error_count = error_count + 1,
           updated_at = NOW()
@@ -831,7 +831,7 @@ export class SourceManager {
   static async getUrls(sourceId: string): Promise<SourceUrl[]> {
     const sql = getConnection();
     return await sql<SourceUrl[]>`
-      SELECT * FROM truth_ledger.source_urls
+      SELECT * FROM truth_ledger_claude.source_urls
       WHERE source_id = ${sourceId}
       ORDER BY created_at
     `;
@@ -843,7 +843,7 @@ export class SourceManager {
   static async createUrl(sourceId: string, input: CreateUrlInput): Promise<SourceUrl> {
     const sql = getConnection();
     const result = await sql<SourceUrl[]>`
-      INSERT INTO truth_ledger.source_urls (source_id, url, is_active)
+      INSERT INTO truth_ledger_claude.source_urls (source_id, url, is_active)
       VALUES (${sourceId}, ${input.url}, ${input.isActive ?? true})
       RETURNING *
     `;
@@ -856,7 +856,7 @@ export class SourceManager {
   static async deleteUrl(id: string): Promise<boolean> {
     const sql = getConnection();
     const result = await sql`
-      DELETE FROM truth_ledger.source_urls WHERE id = ${id}
+      DELETE FROM truth_ledger_claude.source_urls WHERE id = ${id}
     `;
     return result.count > 0;
   }
@@ -868,8 +868,8 @@ export class SourceManager {
     const sql = getConnection();
     return await sql`
       SELECT u.*, s.name as source_name, s.base_trust, s.default_doc_type
-      FROM truth_ledger.source_urls u
-      JOIN truth_ledger.sources s ON s.id = u.source_id
+      FROM truth_ledger_claude.source_urls u
+      JOIN truth_ledger_claude.sources s ON s.id = u.source_id
       WHERE u.is_active = true AND s.is_active = true
       ORDER BY u.created_at
     `;

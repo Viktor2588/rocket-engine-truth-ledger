@@ -118,8 +118,8 @@ export class IntegrityChecker {
 
     const orphanedClaims = await sql<{ id: string }[]>`
       SELECT c.id
-      FROM truth_ledger.claims c
-      LEFT JOIN truth_ledger.evidence e ON e.claim_id = c.id
+      FROM truth_ledger_claude.claims c
+      LEFT JOIN truth_ledger_claude.evidence e ON e.claim_id = c.id
       WHERE e.id IS NULL
     `;
 
@@ -157,8 +157,8 @@ export class IntegrityChecker {
 
     const unscoredClaims = await sql<{ id: string }[]>`
       SELECT c.id
-      FROM truth_ledger.claims c
-      LEFT JOIN truth_ledger.truth_metrics tm ON tm.claim_id = c.id
+      FROM truth_ledger_claude.claims c
+      LEFT JOIN truth_ledger_claude.truth_metrics tm ON tm.claim_id = c.id
       WHERE tm.claim_id IS NULL
     `;
 
@@ -196,10 +196,10 @@ export class IntegrityChecker {
 
     const brokenEvidence = await sql<{ id: string }[]>`
       SELECT e.id
-      FROM truth_ledger.evidence e
-      LEFT JOIN truth_ledger.snippets s ON s.id = e.snippet_id
-      LEFT JOIN truth_ledger.documents d ON d.id = s.document_id
-      LEFT JOIN truth_ledger.sources src ON src.id = d.source_id
+      FROM truth_ledger_claude.evidence e
+      LEFT JOIN truth_ledger_claude.snippets s ON s.id = e.snippet_id
+      LEFT JOIN truth_ledger_claude.documents d ON d.id = s.document_id
+      LEFT JOIN truth_ledger_claude.sources src ON src.id = d.source_id
       WHERE s.id IS NULL OR d.id IS NULL OR src.id IS NULL
     `;
 
@@ -237,8 +237,8 @@ export class IntegrityChecker {
 
     const orphanedSnippets = await sql<{ id: string }[]>`
       SELECT s.id
-      FROM truth_ledger.snippets s
-      LEFT JOIN truth_ledger.evidence e ON e.snippet_id = s.id
+      FROM truth_ledger_claude.snippets s
+      LEFT JOIN truth_ledger_claude.evidence e ON e.snippet_id = s.id
       WHERE e.id IS NULL
       AND s.created_at < NOW() - INTERVAL '7 days'
     `;
@@ -277,8 +277,8 @@ export class IntegrityChecker {
 
     const orphanedDocs = await sql<{ id: string }[]>`
       SELECT d.id
-      FROM truth_ledger.documents d
-      LEFT JOIN truth_ledger.snippets s ON s.document_id = d.id
+      FROM truth_ledger_claude.documents d
+      LEFT JOIN truth_ledger_claude.snippets s ON s.document_id = d.id
       WHERE s.id IS NULL
       AND d.created_at < NOW() - INTERVAL '7 days'
     `;
@@ -317,8 +317,8 @@ export class IntegrityChecker {
 
     const mismatchedGroups = await sql<{ id: string; stored_count: number; actual_count: number }[]>`
       SELECT cg.id, cg.claim_count as stored_count, COUNT(c.id)::int as actual_count
-      FROM truth_ledger.conflict_groups cg
-      LEFT JOIN truth_ledger.claims c ON c.claim_key_hash = cg.claim_key_hash
+      FROM truth_ledger_claude.conflict_groups cg
+      LEFT JOIN truth_ledger_claude.claims c ON c.claim_key_hash = cg.claim_key_hash
       GROUP BY cg.id, cg.claim_count
       HAVING cg.claim_count != COUNT(c.id)
     `;
@@ -357,8 +357,8 @@ export class IntegrityChecker {
 
     const invalidLinks = await sql<{ id: string }[]>`
       SELECT fl.id
-      FROM truth_ledger.field_links fl
-      LEFT JOIN truth_ledger.conflict_groups cg ON cg.claim_key_hash = fl.claim_key_hash
+      FROM truth_ledger_claude.field_links fl
+      LEFT JOIN truth_ledger_claude.conflict_groups cg ON cg.claim_key_hash = fl.claim_key_hash
       WHERE fl.claim_key_hash IS NOT NULL AND cg.id IS NULL
     `;
 
@@ -396,11 +396,11 @@ export class IntegrityChecker {
 
     const brokenDerived = await sql<{ id: string }[]>`
       SELECT c.id
-      FROM truth_ledger.claims c
+      FROM truth_ledger_claude.claims c
       WHERE c.is_derived = true
         AND c.derived_from_claim_id IS NOT NULL
         AND NOT EXISTS (
-          SELECT 1 FROM truth_ledger.claims src
+          SELECT 1 FROM truth_ledger_claude.claims src
           WHERE src.id = c.derived_from_claim_id
         )
     `;
@@ -439,8 +439,8 @@ export class IntegrityChecker {
 
     const inconsistentScopes = await sql<{ claim_key_hash: string }[]>`
       SELECT c.claim_key_hash
-      FROM truth_ledger.claims c
-      JOIN truth_ledger.conflict_groups cg ON cg.claim_key_hash = c.claim_key_hash
+      FROM truth_ledger_claude.claims c
+      JOIN truth_ledger_claude.conflict_groups cg ON cg.claim_key_hash = c.claim_key_hash
       WHERE c.scope_json != cg.scope_json
     `;
 
@@ -478,7 +478,7 @@ export class IntegrityChecker {
 
     const duplicates = await sql<{ claim_key_hash: string; value_json: unknown; count: number }[]>`
       SELECT claim_key_hash, value_json, COUNT(*) as count
-      FROM truth_ledger.claims
+      FROM truth_ledger_claude.claims
       GROUP BY claim_key_hash, value_json
       HAVING COUNT(*) > 1
     `;
@@ -511,13 +511,13 @@ export class IntegrityChecker {
     const sql = getConnection();
 
     const result = await sql`
-      UPDATE truth_ledger.conflict_groups cg
+      UPDATE truth_ledger_claude.conflict_groups cg
       SET claim_count = (
-        SELECT COUNT(*) FROM truth_ledger.claims c
+        SELECT COUNT(*) FROM truth_ledger_claude.claims c
         WHERE c.claim_key_hash = cg.claim_key_hash
       )
       WHERE claim_count != (
-        SELECT COUNT(*) FROM truth_ledger.claims c
+        SELECT COUNT(*) FROM truth_ledger_claude.claims c
         WHERE c.claim_key_hash = cg.claim_key_hash
       )
     `;
@@ -532,9 +532,9 @@ export class IntegrityChecker {
     const sql = getConnection();
 
     const result = await sql`
-      DELETE FROM truth_ledger.claims c
+      DELETE FROM truth_ledger_claude.claims c
       WHERE NOT EXISTS (
-        SELECT 1 FROM truth_ledger.evidence e
+        SELECT 1 FROM truth_ledger_claude.evidence e
         WHERE e.claim_id = c.id
       )
     `;
@@ -549,11 +549,11 @@ export class IntegrityChecker {
     const sql = getConnection();
 
     const result = await sql`
-      UPDATE truth_ledger.field_links
+      UPDATE truth_ledger_claude.field_links
       SET claim_key_hash = NULL
       WHERE claim_key_hash IS NOT NULL
         AND NOT EXISTS (
-          SELECT 1 FROM truth_ledger.conflict_groups cg
+          SELECT 1 FROM truth_ledger_claude.conflict_groups cg
           WHERE cg.claim_key_hash = field_links.claim_key_hash
         )
     `;
@@ -584,11 +584,11 @@ export class IntegrityChecker {
         COUNT(DISTINCT d.id)::int as document_count,
         COUNT(DISTINCT c.id)::int as claim_count,
         AVG(e.extraction_confidence) as avg_extraction_confidence
-      FROM truth_ledger.sources s
-      LEFT JOIN truth_ledger.documents d ON d.source_id = s.id
-      LEFT JOIN truth_ledger.snippets sn ON sn.document_id = d.id
-      LEFT JOIN truth_ledger.evidence e ON e.snippet_id = sn.id
-      LEFT JOIN truth_ledger.claims c ON c.id = e.claim_id
+      FROM truth_ledger_claude.sources s
+      LEFT JOIN truth_ledger_claude.documents d ON d.source_id = s.id
+      LEFT JOIN truth_ledger_claude.snippets sn ON sn.document_id = d.id
+      LEFT JOIN truth_ledger_claude.evidence e ON e.snippet_id = sn.id
+      LEFT JOIN truth_ledger_claude.claims c ON c.id = e.claim_id
       GROUP BY s.id, s.name, s.base_trust
       ORDER BY s.name
     `;
@@ -645,15 +645,15 @@ export class IntegrityChecker {
       pending_review: number;
     }]>`
       SELECT
-        (SELECT COUNT(*) FROM truth_ledger.sources)::int as total_sources,
-        (SELECT COUNT(*) FROM truth_ledger.documents)::int as total_documents,
-        (SELECT COUNT(*) FROM truth_ledger.snippets)::int as total_snippets,
-        (SELECT COUNT(*) FROM truth_ledger.claims)::int as total_claims,
-        (SELECT COUNT(*) FROM truth_ledger.evidence)::int as total_evidence,
-        (SELECT COUNT(*) FROM truth_ledger.conflict_groups)::int as total_conflict_groups,
-        (SELECT COUNT(*) FROM truth_ledger.truth_metrics)::int as claims_with_metrics,
-        (SELECT COUNT(*) FROM truth_ledger.conflict_groups WHERE has_conflict = true)::int as active_conflicts,
-        (SELECT COUNT(*) FROM truth_ledger.review_queue WHERE status = 'pending')::int as pending_review
+        (SELECT COUNT(*) FROM truth_ledger_claude.sources)::int as total_sources,
+        (SELECT COUNT(*) FROM truth_ledger_claude.documents)::int as total_documents,
+        (SELECT COUNT(*) FROM truth_ledger_claude.snippets)::int as total_snippets,
+        (SELECT COUNT(*) FROM truth_ledger_claude.claims)::int as total_claims,
+        (SELECT COUNT(*) FROM truth_ledger_claude.evidence)::int as total_evidence,
+        (SELECT COUNT(*) FROM truth_ledger_claude.conflict_groups)::int as total_conflict_groups,
+        (SELECT COUNT(*) FROM truth_ledger_claude.truth_metrics)::int as claims_with_metrics,
+        (SELECT COUNT(*) FROM truth_ledger_claude.conflict_groups WHERE has_conflict = true)::int as active_conflicts,
+        (SELECT COUNT(*) FROM truth_ledger_claude.review_queue WHERE status = 'pending')::int as pending_review
     `;
 
     const row = stats[0];

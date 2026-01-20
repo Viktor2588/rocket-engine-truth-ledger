@@ -336,7 +336,7 @@ export async function loadExtractorsFromDatabase(): Promise<AttributeExtractor[]
         patterns,
         target_unit as "targetUnit",
         unit_conversions as "unitConversions"
-      FROM truth_ledger.extractor_patterns
+      FROM truth_ledger_claude.extractor_patterns
       WHERE is_active = true
       ORDER BY priority DESC, name
     `;
@@ -403,7 +403,7 @@ export class EntityMatcher {
         metadata,
         created_at as "createdAt",
         updated_at as "updatedAt"
-      FROM truth_ledger.entities
+      FROM truth_ledger_claude.entities
       ORDER BY canonical_name
     `;
     this.entities = rows as unknown as Entity[];
@@ -573,7 +573,7 @@ export class Extractor {
         tolerance_rel as "toleranceRel",
         metadata,
         created_at as "createdAt"
-      FROM truth_ledger.attributes
+      FROM truth_ledger_claude.attributes
     `;
 
     this.attributeCache.clear();
@@ -593,7 +593,7 @@ export class Extractor {
     if (config.documentIds && config.documentIds.length > 0) {
       return await sql<Snippet[]>`
         SELECT s.*
-        FROM truth_ledger.snippets s
+        FROM truth_ledger_claude.snippets s
         WHERE s.document_id = ANY(${config.documentIds})
         ORDER BY s.created_at ASC
         LIMIT ${limit}
@@ -617,9 +617,9 @@ export class Extractor {
           s.created_at,
           d.source_id,
           ROW_NUMBER() OVER (PARTITION BY d.source_id ORDER BY RANDOM()) as source_rank
-        FROM truth_ledger.snippets s
-        JOIN truth_ledger.documents d ON s.document_id = d.id
-        LEFT JOIN truth_ledger.evidence e ON e.snippet_id = s.id
+        FROM truth_ledger_claude.snippets s
+        JOIN truth_ledger_claude.documents d ON s.document_id = d.id
+        LEFT JOIN truth_ledger_claude.evidence e ON e.snippet_id = s.id
         WHERE e.id IS NULL
       )
       SELECT
@@ -708,7 +708,7 @@ export class Extractor {
 
       // Compute claim_key_hash using the DB function
       const hashResult = await sql<{ hash: string }[]>`
-        SELECT truth_ledger.compute_claim_key_hash(
+        SELECT truth_ledger_claude.compute_claim_key_hash(
           ${extracted.entityId}::uuid,
           ${extracted.attributeId}::uuid,
           ${sql.json(extracted.scope as postgres.JSONValue)}::jsonb
@@ -718,7 +718,7 @@ export class Extractor {
 
       // Create conflict group if it doesn't exist
       const cgInsert = await sql<ConflictGroup[]>`
-        INSERT INTO truth_ledger.conflict_groups (
+        INSERT INTO truth_ledger_claude.conflict_groups (
           claim_key_hash,
           entity_id,
           attribute_id,
@@ -746,7 +746,7 @@ export class Extractor {
 
       // Check if this exact claim already exists
       const existingClaims = await sql<Claim[]>`
-        SELECT id FROM truth_ledger.claims
+        SELECT id FROM truth_ledger_claude.claims
         WHERE claim_key_hash = ${claimKeyHash}
           AND value_json = ${sql.json(valueJson as unknown as postgres.JSONValue)}::jsonb
         LIMIT 1
@@ -759,7 +759,7 @@ export class Extractor {
       } else {
         // Create the claim
         const claimInsert = await sql<Claim[]>`
-          INSERT INTO truth_ledger.claims (
+          INSERT INTO truth_ledger_claude.claims (
             claim_key_hash,
             entity_id,
             attribute_id,
@@ -789,7 +789,7 @@ export class Extractor {
 
         // Update conflict group claim count
         await sql`
-          UPDATE truth_ledger.conflict_groups
+          UPDATE truth_ledger_claude.conflict_groups
           SET claim_count = claim_count + 1
           WHERE claim_key_hash = ${claimKeyHash}
         `;
@@ -797,7 +797,7 @@ export class Extractor {
 
       // Create evidence linking claim to snippet
       const evidenceInsert = await sql<Evidence[]>`
-        INSERT INTO truth_ledger.evidence (
+        INSERT INTO truth_ledger_claude.evidence (
           claim_id,
           snippet_id,
           quote,
@@ -852,7 +852,7 @@ export class AttributeManager {
     const sql = getConnection();
 
     const result = await sql<Attribute[]>`
-      INSERT INTO truth_ledger.attributes (
+      INSERT INTO truth_ledger_claude.attributes (
         canonical_name,
         display_name,
         value_type,
@@ -870,8 +870,8 @@ export class AttributeManager {
         ${options?.toleranceRel || 0.02}
       )
       ON CONFLICT (canonical_name) DO UPDATE SET
-        display_name = COALESCE(EXCLUDED.display_name, truth_ledger.attributes.display_name),
-        description = COALESCE(EXCLUDED.description, truth_ledger.attributes.description)
+        display_name = COALESCE(EXCLUDED.display_name, truth_ledger_claude.attributes.display_name),
+        description = COALESCE(EXCLUDED.description, truth_ledger_claude.attributes.description)
       RETURNING *
     `;
 
@@ -884,7 +884,7 @@ export class AttributeManager {
   static async getAttribute(canonicalName: string): Promise<Attribute | null> {
     const sql = getConnection();
     const result = await sql<Attribute[]>`
-      SELECT * FROM truth_ledger.attributes
+      SELECT * FROM truth_ledger_claude.attributes
       WHERE canonical_name = ${canonicalName}
     `;
     return result[0] || null;

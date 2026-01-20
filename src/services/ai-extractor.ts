@@ -351,7 +351,7 @@ export class AIExtractor {
         canonical_name as "canonicalName",
         aliases,
         metadata
-      FROM truth_ledger.entities
+      FROM truth_ledger_claude.entities
     `;
 
     for (const entity of entities as unknown as Entity[]) {
@@ -371,7 +371,7 @@ export class AIExtractor {
         display_name as "displayName",
         value_type as "valueType",
         unit
-      FROM truth_ledger.attributes
+      FROM truth_ledger_claude.attributes
     `;
 
     for (const attr of attributes as unknown as Attribute[]) {

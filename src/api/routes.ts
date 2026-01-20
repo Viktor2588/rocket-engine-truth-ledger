@@ -145,21 +145,21 @@ router.get('/entities', asyncHandler(async (req, res) => {
 
   if (type) {
     entities = await sql<Entity[]>`
-      SELECT ${sql.unsafe(entityColumns)} FROM truth_ledger.entities
+      SELECT ${sql.unsafe(entityColumns)} FROM truth_ledger_claude.entities
       WHERE entity_type = ${type as string}
       ORDER BY canonical_name
       LIMIT ${parseInt(limit as string)} OFFSET ${parseInt(offset as string)}
     `;
   } else if (name) {
     entities = await sql<Entity[]>`
-      SELECT ${sql.unsafe(entityColumns)} FROM truth_ledger.entities
+      SELECT ${sql.unsafe(entityColumns)} FROM truth_ledger_claude.entities
       WHERE canonical_name ILIKE ${'%' + name + '%'}
       ORDER BY canonical_name
       LIMIT ${parseInt(limit as string)} OFFSET ${parseInt(offset as string)}
     `;
   } else {
     entities = await sql<Entity[]>`
-      SELECT ${sql.unsafe(entityColumns)} FROM truth_ledger.entities
+      SELECT ${sql.unsafe(entityColumns)} FROM truth_ledger_claude.entities
       ORDER BY canonical_name
       LIMIT ${parseInt(limit as string)} OFFSET ${parseInt(offset as string)}
     `;
@@ -177,7 +177,7 @@ router.get('/entities/:entityId', asyncHandler(async (req, res) => {
   const { entityId } = req.params;
 
   const entities = await sql<Entity[]>`
-    SELECT ${sql.unsafe(entityColumns)} FROM truth_ledger.entities WHERE id = ${entityId}
+    SELECT ${sql.unsafe(entityColumns)} FROM truth_ledger_claude.entities WHERE id = ${entityId}
   `;
 
   if (entities.length === 0) {
@@ -214,7 +214,7 @@ router.post('/entities', asyncHandler(async (req, res) => {
   }
 
   const result = await sql<Entity[]>`
-    INSERT INTO truth_ledger.entities (canonical_name, entity_type, aliases, metadata)
+    INSERT INTO truth_ledger_claude.entities (canonical_name, entity_type, aliases, metadata)
     VALUES (${canonicalName}, ${entityType}, ${aliases}, ${JSON.stringify(metadata)})
     RETURNING ${sql.unsafe(entityColumns)}
   `;
@@ -232,14 +232,14 @@ router.put('/entities/:entityId', asyncHandler(async (req, res) => {
   const { canonicalName, aliases, metadata } = req.body;
 
   // Check entity exists
-  const existing = await sql`SELECT id FROM truth_ledger.entities WHERE id = ${entityId}`;
+  const existing = await sql`SELECT id FROM truth_ledger_claude.entities WHERE id = ${entityId}`;
   if (existing.length === 0) {
     res.status(404).json({ error: 'Entity not found' });
     return;
   }
 
   const result = await sql<Entity[]>`
-    UPDATE truth_ledger.entities
+    UPDATE truth_ledger_claude.entities
     SET
       canonical_name = COALESCE(${canonicalName}, canonical_name),
       aliases = COALESCE(${aliases}, aliases),
@@ -261,14 +261,14 @@ router.delete('/entities/:entityId', asyncHandler(async (req, res) => {
   const { entityId } = req.params;
 
   // Check entity exists
-  const existing = await sql`SELECT id FROM truth_ledger.entities WHERE id = ${entityId}`;
+  const existing = await sql`SELECT id FROM truth_ledger_claude.entities WHERE id = ${entityId}`;
   if (existing.length === 0) {
     res.status(404).json({ error: 'Entity not found' });
     return;
   }
 
   // Check if entity has associated claims
-  const claims = await sql`SELECT COUNT(*) as count FROM truth_ledger.claims WHERE entity_id = ${entityId}`;
+  const claims = await sql`SELECT COUNT(*) as count FROM truth_ledger_claude.claims WHERE entity_id = ${entityId}`;
   if (parseInt(claims[0].count) > 0) {
     res.status(400).json({
       error: 'Cannot delete entity with existing claims. Delete associated claims first.',
@@ -277,7 +277,7 @@ router.delete('/entities/:entityId', asyncHandler(async (req, res) => {
     return;
   }
 
-  await sql`DELETE FROM truth_ledger.entities WHERE id = ${entityId}`;
+  await sql`DELETE FROM truth_ledger_claude.entities WHERE id = ${entityId}`;
 
   res.json({ success: true, message: 'Entity deleted' });
 }));
@@ -311,7 +311,7 @@ router.get('/extractor-patterns', asyncHandler(async (req, res) => {
         priority,
         created_at as "createdAt",
         updated_at as "updatedAt"
-      FROM truth_ledger.extractor_patterns
+      FROM truth_ledger_claude.extractor_patterns
       WHERE is_active = true
       ORDER BY priority DESC, name
     `;
@@ -330,7 +330,7 @@ router.get('/extractor-patterns', asyncHandler(async (req, res) => {
         priority,
         created_at as "createdAt",
         updated_at as "updatedAt"
-      FROM truth_ledger.extractor_patterns
+      FROM truth_ledger_claude.extractor_patterns
       WHERE entity_type = ${entity_type as string} OR entity_type IS NULL
       ORDER BY priority DESC, name
     `;
@@ -349,7 +349,7 @@ router.get('/extractor-patterns', asyncHandler(async (req, res) => {
         priority,
         created_at as "createdAt",
         updated_at as "updatedAt"
-      FROM truth_ledger.extractor_patterns
+      FROM truth_ledger_claude.extractor_patterns
       ORDER BY priority DESC, name
     `;
   }
@@ -379,7 +379,7 @@ router.get('/extractor-patterns/:id', asyncHandler(async (req, res) => {
       priority,
       created_at as "createdAt",
       updated_at as "updatedAt"
-    FROM truth_ledger.extractor_patterns
+    FROM truth_ledger_claude.extractor_patterns
     WHERE id = ${id}
   `;
 
@@ -425,7 +425,7 @@ router.post('/extractor-patterns', asyncHandler(async (req, res) => {
   }
 
   const result = await sql`
-    INSERT INTO truth_ledger.extractor_patterns
+    INSERT INTO truth_ledger_claude.extractor_patterns
     (name, description, attribute_pattern, entity_type, patterns, target_unit, unit_conversions, is_active, priority)
     VALUES (
       ${name},
@@ -476,7 +476,7 @@ router.put('/extractor-patterns/:id', asyncHandler(async (req, res) => {
   } = req.body;
 
   // Check pattern exists
-  const existing = await sql`SELECT id FROM truth_ledger.extractor_patterns WHERE id = ${id}`;
+  const existing = await sql`SELECT id FROM truth_ledger_claude.extractor_patterns WHERE id = ${id}`;
   if (existing.length === 0) {
     res.status(404).json({ error: 'Extractor pattern not found' });
     return;
@@ -495,7 +495,7 @@ router.put('/extractor-patterns/:id', asyncHandler(async (req, res) => {
   }
 
   const result = await sql`
-    UPDATE truth_ledger.extractor_patterns
+    UPDATE truth_ledger_claude.extractor_patterns
     SET
       name = COALESCE(${name}, name),
       description = COALESCE(${description}, description),
@@ -535,13 +535,13 @@ router.delete('/extractor-patterns/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   // Check pattern exists
-  const existing = await sql`SELECT id FROM truth_ledger.extractor_patterns WHERE id = ${id}`;
+  const existing = await sql`SELECT id FROM truth_ledger_claude.extractor_patterns WHERE id = ${id}`;
   if (existing.length === 0) {
     res.status(404).json({ error: 'Extractor pattern not found' });
     return;
   }
 
-  await sql`DELETE FROM truth_ledger.extractor_patterns WHERE id = ${id}`;
+  await sql`DELETE FROM truth_ledger_claude.extractor_patterns WHERE id = ${id}`;
 
   res.json({ success: true, message: 'Extractor pattern deleted' });
 }));
@@ -563,7 +563,7 @@ router.post('/extractor-patterns/:id/test', asyncHandler(async (req, res) => {
   // Get the pattern
   const patterns = await sql`
     SELECT patterns, target_unit as "targetUnit", unit_conversions as "unitConversions"
-    FROM truth_ledger.extractor_patterns
+    FROM truth_ledger_claude.extractor_patterns
     WHERE id = ${id}
   `;
 
@@ -631,28 +631,28 @@ router.get('/conflict-groups', asyncHandler(async (req, res) => {
 
   if (entity_id) {
     groups = await sql<ConflictGroup[]>`
-      SELECT ${sql.unsafe(cgColumns)} FROM truth_ledger.conflict_groups
+      SELECT ${sql.unsafe(cgColumns)} FROM truth_ledger_claude.conflict_groups
       WHERE entity_id = ${entity_id as string}
       ORDER BY updated_at DESC
       LIMIT ${parseInt(limit as string)} OFFSET ${parseInt(offset as string)}
     `;
   } else if (has_conflict === 'true') {
     groups = await sql<ConflictGroup[]>`
-      SELECT ${sql.unsafe(cgColumns)} FROM truth_ledger.conflict_groups
+      SELECT ${sql.unsafe(cgColumns)} FROM truth_ledger_claude.conflict_groups
       WHERE conflict_present = true
       ORDER BY updated_at DESC
       LIMIT ${parseInt(limit as string)} OFFSET ${parseInt(offset as string)}
     `;
   } else if (status) {
     groups = await sql<ConflictGroup[]>`
-      SELECT ${sql.unsafe(cgColumns)} FROM truth_ledger.conflict_groups
+      SELECT ${sql.unsafe(cgColumns)} FROM truth_ledger_claude.conflict_groups
       WHERE status_factual = ${status as string}
       ORDER BY updated_at DESC
       LIMIT ${parseInt(limit as string)} OFFSET ${parseInt(offset as string)}
     `;
   } else {
     groups = await sql<ConflictGroup[]>`
-      SELECT ${sql.unsafe(cgColumns)} FROM truth_ledger.conflict_groups
+      SELECT ${sql.unsafe(cgColumns)} FROM truth_ledger_claude.conflict_groups
       ORDER BY updated_at DESC
       LIMIT ${parseInt(limit as string)} OFFSET ${parseInt(offset as string)}
     `;
@@ -670,7 +670,7 @@ router.get('/conflict-groups/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   const groups = await sql<ConflictGroup[]>`
-    SELECT ${sql.unsafe(cgColumns)} FROM truth_ledger.conflict_groups WHERE id = ${id}
+    SELECT ${sql.unsafe(cgColumns)} FROM truth_ledger_claude.conflict_groups WHERE id = ${id}
   `;
 
   if (groups.length === 0) {
@@ -683,8 +683,8 @@ router.get('/conflict-groups/:id', asyncHandler(async (req, res) => {
   // Get entity and attribute names
   const entityInfo = await sql`
     SELECT e.canonical_name as "entityName", a.display_name as "attributeName"
-    FROM truth_ledger.entities e
-    JOIN truth_ledger.attributes a ON a.id = ${group.attributeId}
+    FROM truth_ledger_claude.entities e
+    JOIN truth_ledger_claude.attributes a ON a.id = ${group.attributeId}
     WHERE e.id = ${group.entityId}
   `;
   const entityName = entityInfo[0]?.entityName || null;
@@ -722,12 +722,12 @@ router.get('/conflict-groups/:id', asyncHandler(async (req, res) => {
       s.id as "sourceId",
       s.name as "sourceName",
       s.base_trust as "sourceDefaultTrust"
-    FROM truth_ledger.claims c
-    LEFT JOIN truth_ledger.truth_metrics tm ON tm.claim_id = c.id
-    LEFT JOIN truth_ledger.evidence e ON e.claim_id = c.id
-    LEFT JOIN truth_ledger.snippets sn ON e.snippet_id = sn.id
-    LEFT JOIN truth_ledger.documents d ON sn.document_id = d.id
-    LEFT JOIN truth_ledger.sources s ON d.source_id = s.id
+    FROM truth_ledger_claude.claims c
+    LEFT JOIN truth_ledger_claude.truth_metrics tm ON tm.claim_id = c.id
+    LEFT JOIN truth_ledger_claude.evidence e ON e.claim_id = c.id
+    LEFT JOIN truth_ledger_claude.snippets sn ON e.snippet_id = sn.id
+    LEFT JOIN truth_ledger_claude.documents d ON sn.document_id = d.id
+    LEFT JOIN truth_ledger_claude.sources s ON d.source_id = s.id
     WHERE c.claim_key_hash = ${group.claimKeyHash}
     ORDER BY c.value_json->>'v' ASC, tm.truth_raw DESC NULLS LAST
   `;
@@ -788,31 +788,31 @@ router.get('/sources/pipeline-stats', asyncHandler(async (_req, res) => {
       COALESCE(evidence_counts.count, 0)::int as evidence,
       doc_counts.last_retrieved as "lastDocumentAt",
       claim_counts.last_created as "lastClaimAt"
-    FROM truth_ledger.sources s
+    FROM truth_ledger_claude.sources s
     LEFT JOIN (
       SELECT source_id, COUNT(*)::int as count, MAX(retrieved_at) as last_retrieved
-      FROM truth_ledger.documents
+      FROM truth_ledger_claude.documents
       GROUP BY source_id
     ) doc_counts ON doc_counts.source_id = s.id
     LEFT JOIN (
       SELECT d.source_id, COUNT(*)::int as count
-      FROM truth_ledger.snippets sn
-      JOIN truth_ledger.documents d ON sn.document_id = d.id
+      FROM truth_ledger_claude.snippets sn
+      JOIN truth_ledger_claude.documents d ON sn.document_id = d.id
       GROUP BY d.source_id
     ) snippet_counts ON snippet_counts.source_id = s.id
     LEFT JOIN (
       SELECT d.source_id, COUNT(DISTINCT c.id)::int as count, MAX(c.created_at) as last_created
-      FROM truth_ledger.claims c
-      JOIN truth_ledger.evidence e ON e.claim_id = c.id
-      JOIN truth_ledger.snippets sn ON e.snippet_id = sn.id
-      JOIN truth_ledger.documents d ON sn.document_id = d.id
+      FROM truth_ledger_claude.claims c
+      JOIN truth_ledger_claude.evidence e ON e.claim_id = c.id
+      JOIN truth_ledger_claude.snippets sn ON e.snippet_id = sn.id
+      JOIN truth_ledger_claude.documents d ON sn.document_id = d.id
       GROUP BY d.source_id
     ) claim_counts ON claim_counts.source_id = s.id
     LEFT JOIN (
       SELECT d.source_id, COUNT(*)::int as count
-      FROM truth_ledger.evidence e
-      JOIN truth_ledger.snippets sn ON e.snippet_id = sn.id
-      JOIN truth_ledger.documents d ON sn.document_id = d.id
+      FROM truth_ledger_claude.evidence e
+      JOIN truth_ledger_claude.snippets sn ON e.snippet_id = sn.id
+      JOIN truth_ledger_claude.documents d ON sn.document_id = d.id
       GROUP BY d.source_id
     ) evidence_counts ON evidence_counts.source_id = s.id
     ORDER BY documents DESC, s.name
@@ -821,10 +821,10 @@ router.get('/sources/pipeline-stats', asyncHandler(async (_req, res) => {
   // Calculate totals
   const totals = await sql`
     SELECT
-      (SELECT COUNT(*)::int FROM truth_ledger.documents) as documents,
-      (SELECT COUNT(*)::int FROM truth_ledger.snippets) as snippets,
-      (SELECT COUNT(*)::int FROM truth_ledger.claims) as claims,
-      (SELECT COUNT(*)::int FROM truth_ledger.evidence) as evidence
+      (SELECT COUNT(*)::int FROM truth_ledger_claude.documents) as documents,
+      (SELECT COUNT(*)::int FROM truth_ledger_claude.snippets) as snippets,
+      (SELECT COUNT(*)::int FROM truth_ledger_claude.claims) as claims,
+      (SELECT COUNT(*)::int FROM truth_ledger_claude.evidence) as evidence
   `;
 
   res.json({
@@ -1132,18 +1132,18 @@ router.get('/stats', asyncHandler(async (_req, res) => {
 
   const stats = await sql`
     SELECT
-      (SELECT COUNT(*) FROM truth_ledger.sources) as source_count,
-      (SELECT COUNT(*) FROM truth_ledger.documents) as document_count,
-      (SELECT COUNT(*) FROM truth_ledger.snippets) as snippet_count,
-      (SELECT COUNT(*) FROM truth_ledger.entities) as entity_count,
-      (SELECT COUNT(*) FROM truth_ledger.attributes) as attribute_count,
-      (SELECT COUNT(*) FROM truth_ledger.conflict_groups) as conflict_group_count,
-      (SELECT COUNT(*) FROM truth_ledger.claims) as claim_count,
-      (SELECT COUNT(*) FROM truth_ledger.evidence) as evidence_count,
-      (SELECT COUNT(*) FROM truth_ledger.truth_metrics) as metrics_count,
-      (SELECT COUNT(*) FROM truth_ledger.field_links) as field_link_count,
-      (SELECT COUNT(*) FROM truth_ledger.conflict_groups WHERE conflict_present = true) as active_conflicts,
-      (SELECT COUNT(*) FROM truth_ledger.review_queue WHERE status = 'pending') as pending_reviews
+      (SELECT COUNT(*) FROM truth_ledger_claude.sources) as source_count,
+      (SELECT COUNT(*) FROM truth_ledger_claude.documents) as document_count,
+      (SELECT COUNT(*) FROM truth_ledger_claude.snippets) as snippet_count,
+      (SELECT COUNT(*) FROM truth_ledger_claude.entities) as entity_count,
+      (SELECT COUNT(*) FROM truth_ledger_claude.attributes) as attribute_count,
+      (SELECT COUNT(*) FROM truth_ledger_claude.conflict_groups) as conflict_group_count,
+      (SELECT COUNT(*) FROM truth_ledger_claude.claims) as claim_count,
+      (SELECT COUNT(*) FROM truth_ledger_claude.evidence) as evidence_count,
+      (SELECT COUNT(*) FROM truth_ledger_claude.truth_metrics) as metrics_count,
+      (SELECT COUNT(*) FROM truth_ledger_claude.field_links) as field_link_count,
+      (SELECT COUNT(*) FROM truth_ledger_claude.conflict_groups WHERE conflict_present = true) as active_conflicts,
+      (SELECT COUNT(*) FROM truth_ledger_claude.review_queue WHERE status = 'pending') as pending_reviews
   `;
 
   res.json(stats[0]);
@@ -1396,10 +1396,10 @@ router.get('/review-queue', asyncHandler(async (req, res) => {
         a.display_name as "attributeName",
         cg.claim_count as "claimCount",
         cg.scope_json as "scopeJson"
-      FROM truth_ledger.review_queue rq
-      LEFT JOIN truth_ledger.conflict_groups cg ON rq.item_id = cg.id AND rq.item_type = 'conflict_group'
-      LEFT JOIN truth_ledger.entities e ON cg.entity_id = e.id
-      LEFT JOIN truth_ledger.attributes a ON cg.attribute_id = a.id
+      FROM truth_ledger_claude.review_queue rq
+      LEFT JOIN truth_ledger_claude.conflict_groups cg ON rq.item_id = cg.id AND rq.item_type = 'conflict_group'
+      LEFT JOIN truth_ledger_claude.entities e ON cg.entity_id = e.id
+      LEFT JOIN truth_ledger_claude.attributes a ON cg.attribute_id = a.id
       WHERE rq.status = ${statusVal}
         AND rq.item_type = ${itemTypeVal}
         AND rq.priority >= ${priorityVal}
@@ -1424,10 +1424,10 @@ router.get('/review-queue', asyncHandler(async (req, res) => {
         a.display_name as "attributeName",
         cg.claim_count as "claimCount",
         cg.scope_json as "scopeJson"
-      FROM truth_ledger.review_queue rq
-      LEFT JOIN truth_ledger.conflict_groups cg ON rq.item_id = cg.id AND rq.item_type = 'conflict_group'
-      LEFT JOIN truth_ledger.entities e ON cg.entity_id = e.id
-      LEFT JOIN truth_ledger.attributes a ON cg.attribute_id = a.id
+      FROM truth_ledger_claude.review_queue rq
+      LEFT JOIN truth_ledger_claude.conflict_groups cg ON rq.item_id = cg.id AND rq.item_type = 'conflict_group'
+      LEFT JOIN truth_ledger_claude.entities e ON cg.entity_id = e.id
+      LEFT JOIN truth_ledger_claude.attributes a ON cg.attribute_id = a.id
       WHERE rq.status = ${statusVal}
         AND rq.item_type = ${itemTypeVal}
       ORDER BY rq.priority DESC, rq.created_at ASC
@@ -1451,10 +1451,10 @@ router.get('/review-queue', asyncHandler(async (req, res) => {
         a.display_name as "attributeName",
         cg.claim_count as "claimCount",
         cg.scope_json as "scopeJson"
-      FROM truth_ledger.review_queue rq
-      LEFT JOIN truth_ledger.conflict_groups cg ON rq.item_id = cg.id AND rq.item_type = 'conflict_group'
-      LEFT JOIN truth_ledger.entities e ON cg.entity_id = e.id
-      LEFT JOIN truth_ledger.attributes a ON cg.attribute_id = a.id
+      FROM truth_ledger_claude.review_queue rq
+      LEFT JOIN truth_ledger_claude.conflict_groups cg ON rq.item_id = cg.id AND rq.item_type = 'conflict_group'
+      LEFT JOIN truth_ledger_claude.entities e ON cg.entity_id = e.id
+      LEFT JOIN truth_ledger_claude.attributes a ON cg.attribute_id = a.id
       WHERE rq.status = ${statusVal}
         AND rq.priority >= ${priorityVal}
       ORDER BY rq.priority DESC, rq.created_at ASC
@@ -1477,10 +1477,10 @@ router.get('/review-queue', asyncHandler(async (req, res) => {
         a.display_name as "attributeName",
         cg.claim_count as "claimCount",
         cg.scope_json as "scopeJson"
-      FROM truth_ledger.review_queue rq
-      LEFT JOIN truth_ledger.conflict_groups cg ON rq.item_id = cg.id AND rq.item_type = 'conflict_group'
-      LEFT JOIN truth_ledger.entities e ON cg.entity_id = e.id
-      LEFT JOIN truth_ledger.attributes a ON cg.attribute_id = a.id
+      FROM truth_ledger_claude.review_queue rq
+      LEFT JOIN truth_ledger_claude.conflict_groups cg ON rq.item_id = cg.id AND rq.item_type = 'conflict_group'
+      LEFT JOIN truth_ledger_claude.entities e ON cg.entity_id = e.id
+      LEFT JOIN truth_ledger_claude.attributes a ON cg.attribute_id = a.id
       WHERE rq.status = ${statusVal}
       ORDER BY rq.priority DESC, rq.created_at ASC
       LIMIT ${limitVal} OFFSET ${offsetVal}
@@ -1506,7 +1506,7 @@ router.get('/review-queue/stats', asyncHandler(async (_req, res) => {
       COUNT(*) FILTER (WHERE status = 'dismissed')::int as dismissed_count,
       COUNT(*) FILTER (WHERE status = 'pending' AND priority >= 8)::int as high_priority_count,
       ROUND((AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 3600) FILTER (WHERE resolved_at IS NOT NULL))::numeric, 2) as avg_resolution_hours
-    FROM truth_ledger.review_queue
+    FROM truth_ledger_claude.review_queue
   `;
 
   res.json(stats[0]);
@@ -1521,7 +1521,7 @@ router.get('/review-queue/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   const items = await sql<ReviewQueueItem[]>`
-    SELECT ${sql.unsafe(reviewColumns)} FROM truth_ledger.review_queue WHERE id = ${id}
+    SELECT ${sql.unsafe(reviewColumns)} FROM truth_ledger_claude.review_queue WHERE id = ${id}
   `;
 
   if (items.length === 0) {
@@ -1535,7 +1535,7 @@ router.get('/review-queue/:id', asyncHandler(async (req, res) => {
   // Fetch related data based on item type
   if (item.itemType === 'conflict_group') {
     const groups = await sql<ConflictGroup[]>`
-      SELECT ${sql.unsafe(cgColumns)} FROM truth_ledger.conflict_groups WHERE id = ${item.itemId}
+      SELECT ${sql.unsafe(cgColumns)} FROM truth_ledger_claude.conflict_groups WHERE id = ${item.itemId}
     `;
     if (groups.length > 0) {
       const claims = await sql`
@@ -1550,8 +1550,8 @@ router.get('/review-queue/:id', asyncHandler(async (req, res) => {
           tm.support_score as "supportScore",
           tm.contradiction_score as "contradictionScore",
           tm.independent_sources as "independentSources"
-        FROM truth_ledger.claims c
-        LEFT JOIN truth_ledger.truth_metrics tm ON tm.claim_id = c.id
+        FROM truth_ledger_claude.claims c
+        LEFT JOIN truth_ledger_claude.truth_metrics tm ON tm.claim_id = c.id
         WHERE c.claim_key_hash = ${groups[0].claimKeyHash}
         ORDER BY tm.truth_raw DESC NULLS LAST
       `;
@@ -1610,7 +1610,7 @@ router.patch('/review-queue/:id', asyncHandler(async (req, res) => {
   values.push(id);
 
   const query = `
-    UPDATE truth_ledger.review_queue
+    UPDATE truth_ledger_claude.review_queue
     SET ${updates.join(', ')}
     WHERE id = $${paramIndex}
     RETURNING ${reviewColumns.split('\n').map(l => l.trim()).filter(l => l).join(', ')}
@@ -1630,7 +1630,7 @@ router.patch('/review-queue/:id', asyncHandler(async (req, res) => {
     if (winningClaimId) {
       // Mark this claim as the accepted value
       await sql`
-        UPDATE truth_ledger.conflict_groups
+        UPDATE truth_ledger_claude.conflict_groups
         SET status_factual = ${newStatus || 'resolved_by_human'},
             metadata = COALESCE(metadata, '{}'::jsonb) || ${sql.json({
               resolvedBy: 'human_review',
@@ -1666,7 +1666,7 @@ router.post('/review-queue', asyncHandler(async (req, res) => {
   }
 
   const result = await sql<ReviewQueueItem[]>`
-    INSERT INTO truth_ledger.review_queue (
+    INSERT INTO truth_ledger_claude.review_queue (
       item_type,
       item_id,
       reason,
@@ -2444,7 +2444,7 @@ async function executeJob(jobId: string, runId: string, sql: ReturnType<typeof g
         // Get all active sources with URLs
         const sources = await sql<{ id: string; name: string; source_type: string; default_doc_type: string | null }[]>`
           SELECT id, name, source_type, default_doc_type
-          FROM truth_ledger.sources
+          FROM truth_ledger_claude.sources
           WHERE is_active = true
           ORDER BY base_trust DESC, name
         `;
@@ -2472,7 +2472,7 @@ async function executeJob(jobId: string, runId: string, sql: ReturnType<typeof g
 
           // Get active URLs for this source
           const urls = await sql<{ url: string }[]>`
-            SELECT url FROM truth_ledger.source_urls
+            SELECT url FROM truth_ledger_claude.source_urls
             WHERE source_id = ${source.id} AND is_active = true
           `;
 
@@ -2497,7 +2497,7 @@ async function executeJob(jobId: string, runId: string, sql: ReturnType<typeof g
 
             // Update last_fetched_at
             await sql`
-              UPDATE truth_ledger.source_urls
+              UPDATE truth_ledger_claude.source_urls
               SET last_fetched_at = NOW()
               WHERE source_id = ${source.id} AND is_active = true
             `;
@@ -2742,11 +2742,11 @@ router.get('/pipeline/feeds/status', asyncHandler(async (_req, res) => {
         ELSE sf.last_fetched_at + (sf.refresh_interval_minutes || ' minutes')::interval
       END as "nextFetchAt",
       -- Get document count from this feed
-      (SELECT COUNT(*)::int FROM truth_ledger.documents d
+      (SELECT COUNT(*)::int FROM truth_ledger_claude.documents d
        WHERE d.source_id = sf.source_id
        AND d.metadata->>'feedUrl' = sf.feed_url) as "documentCount"
-    FROM truth_ledger.source_feeds sf
-    JOIN truth_ledger.sources s ON s.id = sf.source_id
+    FROM truth_ledger_claude.source_feeds sf
+    JOIN truth_ledger_claude.sources s ON s.id = sf.source_id
     ORDER BY
       sf.is_active DESC,
       sf.error_count DESC,
@@ -2836,8 +2836,8 @@ router.get('/sources/:sourceId/documents', asyncHandler(async (req, res) => {
       d.retrieved_at as "retrievedAt",
       d.content_hash as "contentHash",
       d.supersedes_document_id as "supersedesDocumentId",
-      (SELECT COUNT(*)::int FROM truth_ledger.snippets WHERE document_id = d.id) as snippet_count
-    FROM truth_ledger.documents d
+      (SELECT COUNT(*)::int FROM truth_ledger_claude.snippets WHERE document_id = d.id) as snippet_count
+    FROM truth_ledger_claude.documents d
     WHERE d.source_id = ${sourceId}
     ORDER BY d.retrieved_at DESC
     LIMIT ${parseInt(limit as string)} OFFSET ${parseInt(offset as string)}
@@ -2845,7 +2845,7 @@ router.get('/sources/:sourceId/documents', asyncHandler(async (req, res) => {
 
   const total = await sql`
     SELECT COUNT(*)::int as count
-    FROM truth_ledger.documents
+    FROM truth_ledger_claude.documents
     WHERE source_id = ${sourceId}
   `;
 
@@ -2866,16 +2866,16 @@ router.get('/sources/:sourceId/stats', asyncHandler(async (req, res) => {
 
   const stats = await sql`
     SELECT
-      (SELECT COUNT(*)::int FROM truth_ledger.documents WHERE source_id = ${sourceId}) as document_count,
-      (SELECT COUNT(*)::int FROM truth_ledger.snippets s
-       JOIN truth_ledger.documents d ON s.document_id = d.id
+      (SELECT COUNT(*)::int FROM truth_ledger_claude.documents WHERE source_id = ${sourceId}) as document_count,
+      (SELECT COUNT(*)::int FROM truth_ledger_claude.snippets s
+       JOIN truth_ledger_claude.documents d ON s.document_id = d.id
        WHERE d.source_id = ${sourceId}) as snippet_count,
-      (SELECT COUNT(*)::int FROM truth_ledger.evidence e
-       JOIN truth_ledger.snippets s ON e.snippet_id = s.id
-       JOIN truth_ledger.documents d ON s.document_id = d.id
+      (SELECT COUNT(*)::int FROM truth_ledger_claude.evidence e
+       JOIN truth_ledger_claude.snippets s ON e.snippet_id = s.id
+       JOIN truth_ledger_claude.documents d ON s.document_id = d.id
        WHERE d.source_id = ${sourceId}) as evidence_count,
-      (SELECT MIN(retrieved_at) FROM truth_ledger.documents WHERE source_id = ${sourceId}) as first_retrieved,
-      (SELECT MAX(retrieved_at) FROM truth_ledger.documents WHERE source_id = ${sourceId}) as last_retrieved
+      (SELECT MIN(retrieved_at) FROM truth_ledger_claude.documents WHERE source_id = ${sourceId}) as first_retrieved,
+      (SELECT MAX(retrieved_at) FROM truth_ledger_claude.documents WHERE source_id = ${sourceId}) as last_retrieved
   `;
 
   res.json(stats[0]);
@@ -2890,17 +2890,17 @@ router.get('/pipeline/data-flow', asyncHandler(async (_req, res) => {
 
   const flow = await sql`
     SELECT
-      (SELECT COUNT(*)::int FROM truth_ledger.sources) as sources,
-      (SELECT COUNT(*)::int FROM truth_ledger.documents) as documents,
-      (SELECT COUNT(*)::int FROM truth_ledger.snippets) as snippets,
-      (SELECT COUNT(*)::int FROM truth_ledger.entities) as entities,
-      (SELECT COUNT(*)::int FROM truth_ledger.claims) as claims,
-      (SELECT COUNT(*)::int FROM truth_ledger.evidence) as evidence,
-      (SELECT COUNT(*)::int FROM truth_ledger.conflict_groups) as conflict_groups,
-      (SELECT COUNT(*)::int FROM truth_ledger.conflict_groups WHERE conflict_present = true) as active_conflicts,
-      (SELECT COUNT(*)::int FROM truth_ledger.truth_metrics) as truth_metrics,
-      (SELECT COUNT(*)::int FROM truth_ledger.field_links) as field_links,
-      (SELECT COUNT(*)::int FROM truth_ledger.review_queue WHERE status = 'pending') as pending_reviews
+      (SELECT COUNT(*)::int FROM truth_ledger_claude.sources) as sources,
+      (SELECT COUNT(*)::int FROM truth_ledger_claude.documents) as documents,
+      (SELECT COUNT(*)::int FROM truth_ledger_claude.snippets) as snippets,
+      (SELECT COUNT(*)::int FROM truth_ledger_claude.entities) as entities,
+      (SELECT COUNT(*)::int FROM truth_ledger_claude.claims) as claims,
+      (SELECT COUNT(*)::int FROM truth_ledger_claude.evidence) as evidence,
+      (SELECT COUNT(*)::int FROM truth_ledger_claude.conflict_groups) as conflict_groups,
+      (SELECT COUNT(*)::int FROM truth_ledger_claude.conflict_groups WHERE conflict_present = true) as active_conflicts,
+      (SELECT COUNT(*)::int FROM truth_ledger_claude.truth_metrics) as truth_metrics,
+      (SELECT COUNT(*)::int FROM truth_ledger_claude.field_links) as field_links,
+      (SELECT COUNT(*)::int FROM truth_ledger_claude.review_queue WHERE status = 'pending') as pending_reviews
   `;
 
   // Get growth over time (last 7 days)
@@ -2908,7 +2908,7 @@ router.get('/pipeline/data-flow', asyncHandler(async (_req, res) => {
     SELECT
       DATE_TRUNC('day', created_at)::date as date,
       COUNT(*)::int as documents_created
-    FROM truth_ledger.documents
+    FROM truth_ledger_claude.documents
     WHERE created_at > NOW() - INTERVAL '7 days'
     GROUP BY DATE_TRUNC('day', created_at)
     ORDER BY date
@@ -2942,15 +2942,15 @@ router.get('/pipeline/stage/:stage/details', asyncHandler(async (req, res) => {
           s.id as "sourceId",
           s.name as "sourceName",
           COUNT(*)::int as count
-        FROM truth_ledger.documents d
-        JOIN truth_ledger.sources s ON d.source_id = s.id
+        FROM truth_ledger_claude.documents d
+        JOIN truth_ledger_claude.sources s ON d.source_id = s.id
         GROUP BY s.id, s.name
         ORDER BY count DESC
       `;
       const total = bySource.reduce((sum, s) => sum + s.count, 0);
       const samples = await sql`
         SELECT id, title, url, doc_type as "docType", created_at as "createdAt"
-        FROM truth_ledger.documents
+        FROM truth_ledger_claude.documents
         ORDER BY created_at DESC
         LIMIT ${limit}
       `;
@@ -2958,7 +2958,7 @@ router.get('/pipeline/stage/:stage/details', asyncHandler(async (req, res) => {
         SELECT
           COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours')::int as last_24h,
           COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days')::int as last_7d
-        FROM truth_ledger.documents
+        FROM truth_ledger_claude.documents
       `;
       result = {
         stage: 'documents',
@@ -2975,16 +2975,16 @@ router.get('/pipeline/stage/:stage/details', asyncHandler(async (req, res) => {
           s.id as "sourceId",
           s.name as "sourceName",
           COUNT(*)::int as count
-        FROM truth_ledger.snippets sn
-        JOIN truth_ledger.documents d ON sn.document_id = d.id
-        JOIN truth_ledger.sources s ON d.source_id = s.id
+        FROM truth_ledger_claude.snippets sn
+        JOIN truth_ledger_claude.documents d ON sn.document_id = d.id
+        JOIN truth_ledger_claude.sources s ON d.source_id = s.id
         GROUP BY s.id, s.name
         ORDER BY count DESC
       `;
       const total = bySource.reduce((sum, s) => sum + s.count, 0);
       const samples = await sql`
         SELECT sn.id, sn.locator, LEFT(sn.text, 200) as text, sn.snippet_type as "snippetType", sn.created_at as "createdAt"
-        FROM truth_ledger.snippets sn
+        FROM truth_ledger_claude.snippets sn
         ORDER BY sn.created_at DESC
         LIMIT ${limit}
       `;
@@ -2992,7 +2992,7 @@ router.get('/pipeline/stage/:stage/details', asyncHandler(async (req, res) => {
         SELECT
           COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours')::int as last_24h,
           COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days')::int as last_7d
-        FROM truth_ledger.snippets
+        FROM truth_ledger_claude.snippets
       `;
       result = {
         stage: 'snippets',
@@ -3009,11 +3009,11 @@ router.get('/pipeline/stage/:stage/details', asyncHandler(async (req, res) => {
           s.id as "sourceId",
           s.name as "sourceName",
           COUNT(DISTINCT c.id)::int as count
-        FROM truth_ledger.claims c
-        JOIN truth_ledger.evidence e ON e.claim_id = c.id
-        JOIN truth_ledger.snippets sn ON e.snippet_id = sn.id
-        JOIN truth_ledger.documents d ON sn.document_id = d.id
-        JOIN truth_ledger.sources s ON d.source_id = s.id
+        FROM truth_ledger_claude.claims c
+        JOIN truth_ledger_claude.evidence e ON e.claim_id = c.id
+        JOIN truth_ledger_claude.snippets sn ON e.snippet_id = sn.id
+        JOIN truth_ledger_claude.documents d ON sn.document_id = d.id
+        JOIN truth_ledger_claude.sources s ON d.source_id = s.id
         GROUP BY s.id, s.name
         ORDER BY count DESC
       `;
@@ -3022,9 +3022,9 @@ router.get('/pipeline/stage/:stage/details', asyncHandler(async (req, res) => {
         SELECT c.id, c.value_json as "valueJson", c.unit, c.scope_json as "scopeJson",
                ent.canonical_name as "entityName", attr.canonical_name as "attributeName",
                c.created_at as "createdAt"
-        FROM truth_ledger.claims c
-        LEFT JOIN truth_ledger.entities ent ON c.entity_id = ent.id
-        LEFT JOIN truth_ledger.attributes attr ON c.attribute_id = attr.id
+        FROM truth_ledger_claude.claims c
+        LEFT JOIN truth_ledger_claude.entities ent ON c.entity_id = ent.id
+        LEFT JOIN truth_ledger_claude.attributes attr ON c.attribute_id = attr.id
         ORDER BY c.created_at DESC
         LIMIT ${limit}
       `;
@@ -3032,7 +3032,7 @@ router.get('/pipeline/stage/:stage/details', asyncHandler(async (req, res) => {
         SELECT
           COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours')::int as last_24h,
           COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days')::int as last_7d
-        FROM truth_ledger.claims
+        FROM truth_ledger_claude.claims
       `;
       result = {
         stage: 'claims',
@@ -3049,17 +3049,17 @@ router.get('/pipeline/stage/:stage/details', asyncHandler(async (req, res) => {
           s.id as "sourceId",
           s.name as "sourceName",
           COUNT(*)::int as count
-        FROM truth_ledger.evidence e
-        JOIN truth_ledger.snippets sn ON e.snippet_id = sn.id
-        JOIN truth_ledger.documents d ON sn.document_id = d.id
-        JOIN truth_ledger.sources s ON d.source_id = s.id
+        FROM truth_ledger_claude.evidence e
+        JOIN truth_ledger_claude.snippets sn ON e.snippet_id = sn.id
+        JOIN truth_ledger_claude.documents d ON sn.document_id = d.id
+        JOIN truth_ledger_claude.sources s ON d.source_id = s.id
         GROUP BY s.id, s.name
         ORDER BY count DESC
       `;
       const total = bySource.reduce((sum, s) => sum + s.count, 0);
       const samples = await sql`
         SELECT e.id, e.quote, e.stance, e.extraction_confidence as "confidence", e.created_at as "createdAt"
-        FROM truth_ledger.evidence e
+        FROM truth_ledger_claude.evidence e
         ORDER BY e.created_at DESC
         LIMIT ${limit}
       `;
@@ -3067,7 +3067,7 @@ router.get('/pipeline/stage/:stage/details', asyncHandler(async (req, res) => {
         SELECT
           COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours')::int as last_24h,
           COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days')::int as last_7d
-        FROM truth_ledger.evidence
+        FROM truth_ledger_claude.evidence
       `;
       result = {
         stage: 'evidence',
@@ -3084,8 +3084,8 @@ router.get('/pipeline/stage/:stage/details', asyncHandler(async (req, res) => {
           ent.id as "entityId",
           ent.canonical_name as "entityName",
           COUNT(*)::int as count
-        FROM truth_ledger.conflict_groups cg
-        JOIN truth_ledger.entities ent ON cg.entity_id = ent.id
+        FROM truth_ledger_claude.conflict_groups cg
+        JOIN truth_ledger_claude.entities ent ON cg.entity_id = ent.id
         WHERE cg.conflict_present = true
         GROUP BY ent.id, ent.canonical_name
         ORDER BY count DESC
@@ -3095,9 +3095,9 @@ router.get('/pipeline/stage/:stage/details', asyncHandler(async (req, res) => {
         SELECT cg.id, cg.claim_count as "claimCount", cg.status_factual as "statusFactual",
                ent.canonical_name as "entityName", attr.canonical_name as "attributeName",
                cg.created_at as "createdAt"
-        FROM truth_ledger.conflict_groups cg
-        LEFT JOIN truth_ledger.entities ent ON cg.entity_id = ent.id
-        LEFT JOIN truth_ledger.attributes attr ON cg.attribute_id = attr.id
+        FROM truth_ledger_claude.conflict_groups cg
+        LEFT JOIN truth_ledger_claude.entities ent ON cg.entity_id = ent.id
+        LEFT JOIN truth_ledger_claude.attributes attr ON cg.attribute_id = attr.id
         WHERE cg.conflict_present = true
         ORDER BY cg.created_at DESC
         LIMIT ${limit}
@@ -3118,13 +3118,13 @@ router.get('/pipeline/stage/:stage/details', asyncHandler(async (req, res) => {
           AVG(truth_raw)::numeric(4,2) as avg_truth,
           COUNT(*) FILTER (WHERE truth_raw >= 0.7)::int as high_confidence,
           COUNT(*) FILTER (WHERE truth_raw < 0.3)::int as low_confidence
-        FROM truth_ledger.truth_metrics
+        FROM truth_ledger_claude.truth_metrics
       `;
       const samples = await sql`
         SELECT tm.id, tm.truth_raw as "truthRaw", tm.support_score as "supportScore",
                tm.contradiction_score as "contradictionScore", tm.independent_sources as "independentSources",
                tm.created_at as "createdAt"
-        FROM truth_ledger.truth_metrics tm
+        FROM truth_ledger_claude.truth_metrics tm
         ORDER BY tm.created_at DESC
         LIMIT ${limit}
       `;
@@ -3170,7 +3170,7 @@ router.get('/documents/:id/snippets', asyncHandler(async (req, res) => {
       LEFT(text, 500) as text,
       snippet_type as "snippetType",
       created_at as "createdAt"
-    FROM truth_ledger.snippets
+    FROM truth_ledger_claude.snippets
     WHERE document_id = ${id}
     ORDER BY locator
     LIMIT ${limit}
@@ -3198,10 +3198,10 @@ router.get('/snippets/:id/claims', asyncHandler(async (req, res) => {
       e.stance,
       e.extraction_confidence as "confidence",
       e.quote
-    FROM truth_ledger.evidence e
-    JOIN truth_ledger.claims c ON e.claim_id = c.id
-    LEFT JOIN truth_ledger.entities ent ON c.entity_id = ent.id
-    LEFT JOIN truth_ledger.attributes attr ON c.attribute_id = attr.id
+    FROM truth_ledger_claude.evidence e
+    JOIN truth_ledger_claude.claims c ON e.claim_id = c.id
+    LEFT JOIN truth_ledger_claude.entities ent ON c.entity_id = ent.id
+    LEFT JOIN truth_ledger_claude.attributes attr ON c.attribute_id = attr.id
     WHERE e.snippet_id = ${id}
   `;
 
@@ -3227,10 +3227,10 @@ router.get('/claims/:id/evidence', asyncHandler(async (req, res) => {
       d.title as "documentTitle",
       d.url as "documentUrl",
       s.name as "sourceName"
-    FROM truth_ledger.evidence e
-    JOIN truth_ledger.snippets sn ON e.snippet_id = sn.id
-    JOIN truth_ledger.documents d ON sn.document_id = d.id
-    JOIN truth_ledger.sources s ON d.source_id = s.id
+    FROM truth_ledger_claude.evidence e
+    JOIN truth_ledger_claude.snippets sn ON e.snippet_id = sn.id
+    JOIN truth_ledger_claude.documents d ON sn.document_id = d.id
+    JOIN truth_ledger_claude.sources s ON d.source_id = s.id
     WHERE e.claim_id = ${id}
   `;
 

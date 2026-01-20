@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { apiClient } from '@/services/apiClient';
 import type {
   Entity,
   Fact,
@@ -32,12 +32,32 @@ import type {
   UpdateEntityInput,
 } from './types';
 
-const api = axios.create({
-  baseURL: '/api/v1',
-  headers: {
-    'Content-Type': 'application/json',
+// Adapter to match axios response shape ({ data: any }) expected by existing code
+// Using 'any' for backward compatibility with existing code that expects axios-like behavior
+/* eslint-disable @typescript-eslint/no-explicit-any */
+const api = {
+  get: async (url: string, config?: { params?: any }): Promise<{ data: any }> => {
+    const data = await apiClient.get<any>(url, config);
+    return { data };
   },
-});
+  post: async (url: string, data?: unknown): Promise<{ data: any }> => {
+    const responseData = await apiClient.post<any>(url, data);
+    return { data: responseData };
+  },
+  put: async (url: string, data?: unknown): Promise<{ data: any }> => {
+    const responseData = await apiClient.put<any>(url, data);
+    return { data: responseData };
+  },
+  patch: async (url: string, data?: unknown): Promise<{ data: any }> => {
+    const responseData = await apiClient.patch<any>(url, data);
+    return { data: responseData };
+  },
+  delete: async (url: string): Promise<{ data: any }> => {
+    const responseData = await apiClient.delete<any>(url);
+    return { data: responseData };
+  },
+};
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 // Stats API
 export const statsApi = {

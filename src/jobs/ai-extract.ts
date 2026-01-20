@@ -147,8 +147,8 @@ async function getSnippetsToProcess(config: AIExtractJobConfig): Promise<Snippet
     // Get snippets even if they have existing claims
     return await sql<Snippet[]>`
       SELECT DISTINCT s.*
-      FROM truth_ledger.snippets s
-      JOIN truth_ledger.documents d ON s.document_id = d.id
+      FROM truth_ledger_claude.snippets s
+      JOIN truth_ledger_claude.documents d ON s.document_id = d.id
       ${config.sourceIds?.length ? sql`WHERE d.source_id = ANY(${config.sourceIds})` : sql``}
       ORDER BY s.created_at DESC
       LIMIT ${limit}
@@ -160,13 +160,13 @@ async function getSnippetsToProcess(config: AIExtractJobConfig): Promise<Snippet
   return await sql<Snippet[]>`
     WITH ai_processed AS (
       SELECT DISTINCT e.snippet_id
-      FROM truth_ledger.evidence e
-      JOIN truth_ledger.claims c ON e.claim_id = c.id
+      FROM truth_ledger_claude.evidence e
+      JOIN truth_ledger_claude.claims c ON e.claim_id = c.id
       WHERE c.parser_notes LIKE '%AIExtractor%'
     )
     SELECT s.*
-    FROM truth_ledger.snippets s
-    JOIN truth_ledger.documents d ON s.document_id = d.id
+    FROM truth_ledger_claude.snippets s
+    JOIN truth_ledger_claude.documents d ON s.document_id = d.id
     LEFT JOIN ai_processed ap ON ap.snippet_id = s.id
     WHERE ap.snippet_id IS NULL
     ${config.sourceIds?.length ? sql`AND d.source_id = ANY(${config.sourceIds})` : sql``}
@@ -255,7 +255,7 @@ async function saveSingleClaim(
 
     // Compute claim_key_hash
     const hashResult = await sql<{ hash: string }[]>`
-      SELECT truth_ledger.compute_claim_key_hash(
+      SELECT truth_ledger_claude.compute_claim_key_hash(
         ${entity.id}::uuid,
         ${attribute.id}::uuid,
         ${sql.json(scope as postgres.JSONValue)}::jsonb
@@ -265,7 +265,7 @@ async function saveSingleClaim(
 
     // Create conflict group if it doesn't exist
     const cgInsert = await sql`
-      INSERT INTO truth_ledger.conflict_groups (
+      INSERT INTO truth_ledger_claude.conflict_groups (
         claim_key_hash,
         entity_id,
         attribute_id,
@@ -302,7 +302,7 @@ async function saveSingleClaim(
 
     // Check if this exact claim already exists
     const existingClaims = await sql`
-      SELECT id FROM truth_ledger.claims
+      SELECT id FROM truth_ledger_claude.claims
       WHERE claim_key_hash = ${claimKeyHash}
         AND value_json = ${sql.json(valueJson as unknown as postgres.JSONValue)}::jsonb
       LIMIT 1
@@ -315,7 +315,7 @@ async function saveSingleClaim(
     } else {
       // Create the claim
       const claimInsert = await sql`
-        INSERT INTO truth_ledger.claims (
+        INSERT INTO truth_ledger_claude.claims (
           claim_key_hash,
           entity_id,
           attribute_id,
@@ -341,7 +341,7 @@ async function saveSingleClaim(
 
       // Update conflict group claim count
       await sql`
-        UPDATE truth_ledger.conflict_groups
+        UPDATE truth_ledger_claude.conflict_groups
         SET claim_count = claim_count + 1
         WHERE claim_key_hash = ${claimKeyHash}
       `;
@@ -349,7 +349,7 @@ async function saveSingleClaim(
 
     // Create evidence linking claim to snippet
     const evidenceInsert = await sql`
-      INSERT INTO truth_ledger.evidence (
+      INSERT INTO truth_ledger_claude.evidence (
         claim_id,
         snippet_id,
         quote,

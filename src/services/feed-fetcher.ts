@@ -291,7 +291,7 @@ export class FeedFetcher {
     // Get or create source in database
     let dbSource: Source;
     const existingSources = await sql<Source[]>`
-      SELECT * FROM truth_ledger.sources WHERE name = ${sourceConfig.name}
+      SELECT * FROM truth_ledger_claude.sources WHERE name = ${sourceConfig.name}
     `;
 
     if (existingSources.length > 0) {
@@ -590,8 +590,8 @@ export class FeedFetcher {
         f.created_at as "createdAt",
         f.updated_at as "updatedAt",
         s.name as "sourceName"
-      FROM truth_ledger.source_feeds f
-      JOIN truth_ledger.sources s ON s.id = f.source_id
+      FROM truth_ledger_claude.source_feeds f
+      JOIN truth_ledger_claude.sources s ON s.id = f.source_id
       WHERE f.is_active = true
         AND s.is_active = true
         AND (

@@ -207,7 +207,7 @@ export class Deriver {
 
     if (config.entityIds && config.entityIds.length > 0) {
       return await sql<Entity[]>`
-        SELECT ${sql.unsafe(entityColumns)} FROM truth_ledger.entities
+        SELECT ${sql.unsafe(entityColumns)} FROM truth_ledger_claude.entities
         WHERE id = ANY(${config.entityIds})
         ORDER BY canonical_name
       `;
@@ -227,8 +227,8 @@ export class Deriver {
           e.metadata,
           e.created_at as "createdAt",
           e.updated_at as "updatedAt"
-        FROM truth_ledger.entities e
-        JOIN truth_ledger.conflict_groups cg ON cg.entity_id = e.id
+        FROM truth_ledger_claude.entities e
+        JOIN truth_ledger_claude.conflict_groups cg ON cg.entity_id = e.id
         ORDER BY e.canonical_name
         LIMIT ${limit}
       `;
@@ -247,9 +247,9 @@ export class Deriver {
         e.metadata,
         e.created_at as "createdAt",
         e.updated_at as "updatedAt"
-      FROM truth_ledger.entities e
-      JOIN truth_ledger.conflict_groups cg ON cg.entity_id = e.id
-      LEFT JOIN truth_ledger.field_links fl ON fl.entity_id = e.id
+      FROM truth_ledger_claude.entities e
+      JOIN truth_ledger_claude.conflict_groups cg ON cg.entity_id = e.id
+      LEFT JOIN truth_ledger_claude.field_links fl ON fl.entity_id = e.id
       WHERE fl.id IS NULL
       ORDER BY e.canonical_name
       LIMIT ${limit}
@@ -319,7 +319,7 @@ export class Deriver {
           tolerance_rel as "toleranceRel",
           metadata,
           created_at as "createdAt"
-        FROM truth_ledger.attributes
+        FROM truth_ledger_claude.attributes
         WHERE canonical_name = ${rule.sourceAttributePattern}
       `;
 
@@ -356,7 +356,7 @@ export class Deriver {
 
       // Compute claim_key_hash for the derived claim
       const hashResult = await sql<{ hash: string }[]>`
-        SELECT truth_ledger.compute_claim_key_hash(
+        SELECT truth_ledger_claude.compute_claim_key_hash(
           ${entity.id}::uuid,
           ${attribute.id}::uuid,
           ${sql.json(domainScope as postgres.JSONValue)}::jsonb
@@ -366,7 +366,7 @@ export class Deriver {
 
       // Create conflict group for derived claim
       const cgInsert = await sql<ConflictGroup[]>`
-        INSERT INTO truth_ledger.conflict_groups (
+        INSERT INTO truth_ledger_claude.conflict_groups (
           claim_key_hash,
           entity_id,
           attribute_id,
@@ -389,7 +389,7 @@ export class Deriver {
       };
 
       const existingDerived = await sql<Claim[]>`
-        SELECT id FROM truth_ledger.claims
+        SELECT id FROM truth_ledger_claude.claims
         WHERE claim_key_hash = ${derivedClaimKeyHash}
           AND derived_from_claim_id = ${bestClaim.id}
       `;
@@ -400,7 +400,7 @@ export class Deriver {
         derivedClaimId = existingDerived[0].id;
       } else {
         const claimInsert = await sql<Claim[]>`
-          INSERT INTO truth_ledger.claims (
+          INSERT INTO truth_ledger_claude.claims (
             claim_key_hash,
             entity_id,
             attribute_id,
@@ -428,14 +428,14 @@ export class Deriver {
 
         // Update conflict group claim count
         await sql`
-          UPDATE truth_ledger.conflict_groups
+          UPDATE truth_ledger_claude.conflict_groups
           SET claim_count = claim_count + 1
           WHERE claim_key_hash = ${derivedClaimKeyHash}
         `;
 
         // Copy evidence from source claim to derived claim
         await sql`
-          INSERT INTO truth_ledger.evidence (
+          INSERT INTO truth_ledger_claude.evidence (
             claim_id,
             snippet_id,
             quote,
@@ -450,7 +450,7 @@ export class Deriver {
             stance,
             extraction_confidence,
             'Copied from source claim ' || ${bestClaim.id}
-          FROM truth_ledger.evidence
+          FROM truth_ledger_claude.evidence
           WHERE claim_id = ${bestClaim.id}
           ON CONFLICT (claim_id, snippet_id) DO NOTHING
         `;
@@ -458,7 +458,7 @@ export class Deriver {
 
       // Create or update field link
       const fieldLinkResult = await sql<FieldLink[]>`
-        INSERT INTO truth_ledger.field_links (
+        INSERT INTO truth_ledger_claude.field_links (
           entity_id,
           field_name,
           claim_key_hash,
@@ -526,8 +526,8 @@ export class Deriver {
         c.created_at as "createdAt",
         c.updated_at as "updatedAt",
         tm.truth_raw as "truthRaw"
-      FROM truth_ledger.claims c
-      LEFT JOIN truth_ledger.truth_metrics tm ON tm.claim_id = c.id
+      FROM truth_ledger_claude.claims c
+      LEFT JOIN truth_ledger_claude.truth_metrics tm ON tm.claim_id = c.id
       WHERE c.entity_id = $1
         AND c.attribute_id = $2
         AND c.is_derived = false
@@ -616,7 +616,7 @@ export class Deriver {
         auto_update as "autoUpdate",
         created_at as "createdAt",
         updated_at as "updatedAt"
-      FROM truth_ledger.field_links
+      FROM truth_ledger_claude.field_links
       WHERE entity_id = ${entityId} AND field_name = ${fieldName}
     `;
     return result[0] || null;
@@ -636,7 +636,7 @@ export class Deriver {
         auto_update as "autoUpdate",
         created_at as "createdAt",
         updated_at as "updatedAt"
-      FROM truth_ledger.field_links
+      FROM truth_ledger_claude.field_links
       WHERE entity_id = ${entityId}
       ORDER BY field_name
     `;
