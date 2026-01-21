@@ -50,4 +50,9 @@ export function getDatabaseUrl(): string {
 }
 
 // Schema name - configurable via environment variable
-export const SCHEMA = getEnvOrDefault('DB_SCHEMA', 'truth_ledger');
+export const SCHEMA = getEnvOrDefault('DB_SCHEMA', 'truth_ledger_claude');
+
+// Table helper - returns fully qualified table name
+export function table(name: string): string {
+  return `${SCHEMA}.${name}`;
+}

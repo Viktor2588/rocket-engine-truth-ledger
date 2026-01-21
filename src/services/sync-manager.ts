@@ -9,7 +9,7 @@ export class SyncManager {
   static async start(syncType: SyncType, metadata: Record<string, unknown> = {}): Promise<number> {
     const sql = getConnection();
     const result = await sql<SyncStatus[]>`
-      INSERT INTO sync_status (
+      INSERT INTO truth_ledger_claude.sync_status (
         sync_type,
         state,
         started_at,
@@ -31,7 +31,7 @@ export class SyncManager {
   static async progress(id: number, recordsSynced: number): Promise<void> {
     const sql = getConnection();
     await sql`
-      UPDATE sync_status
+      UPDATE truth_ledger_claude.sync_status
       SET records_synced = ${recordsSynced},
           updated_at = NOW()
       WHERE id = ${id}
@@ -44,7 +44,7 @@ export class SyncManager {
   static async complete(id: number, recordsSynced: number): Promise<void> {
     const sql = getConnection();
     await sql`
-      UPDATE sync_status
+      UPDATE truth_ledger_claude.sync_status
       SET state = 'success',
           completed_at = NOW(),
           records_synced = ${recordsSynced}
@@ -59,7 +59,7 @@ export class SyncManager {
     const errorMessage = typeof error === 'string' ? error : error.message;
     const sql = getConnection();
     await sql`
-      UPDATE sync_status
+      UPDATE truth_ledger_claude.sync_status
       SET state = 'failed',
           completed_at = NOW(),
           error_message = ${errorMessage}

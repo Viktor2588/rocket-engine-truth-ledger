@@ -638,7 +638,7 @@ export class FeedFetcher {
         // Check last sync for this feed
         const lastSync = await sql<Array<{ completedAt: Date }>>`
           SELECT completed_at as "completedAt"
-          FROM sync_status
+          FROM truth_ledger_claude.sync_status
           WHERE sync_type = 'feed_ingest'
             AND metadata->>'feedUrl' = ${feed.url}
             AND state = 'success'

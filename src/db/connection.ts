@@ -4,13 +4,14 @@
  */
 
 import postgres from 'postgres';
-import { databaseConfig, getDatabaseUrl } from '../config/database.js';
+import { databaseConfig, getDatabaseUrl, SCHEMA } from '../config/database.js';
 
 // Singleton connection instance
 let sql: postgres.Sql | null = null;
 
 /**
  * Get or create the database connection
+ * Note: search_path is set via the connection URL options parameter
  */
 export function getConnection(): postgres.Sql {
   if (!sql) {
@@ -25,6 +26,9 @@ export function getConnection(): postgres.Sql {
   }
   return sql;
 }
+
+// Export schema for cases where explicit qualification is needed
+export { SCHEMA };
 
 /**
  * Close the database connection

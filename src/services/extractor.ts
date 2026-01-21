@@ -708,7 +708,7 @@ export class Extractor {
 
       // Compute claim_key_hash using the DB function
       const hashResult = await sql<{ hash: string }[]>`
-        SELECT truth_ledger_claude.compute_claim_key_hash(
+        SELECT compute_claim_key_hash(
           ${extracted.entityId}::uuid,
           ${extracted.attributeId}::uuid,
           ${sql.json(extracted.scope as postgres.JSONValue)}::jsonb
@@ -870,8 +870,8 @@ export class AttributeManager {
         ${options?.toleranceRel || 0.02}
       )
       ON CONFLICT (canonical_name) DO UPDATE SET
-        display_name = COALESCE(EXCLUDED.display_name, truth_ledger_claude.attributes.display_name),
-        description = COALESCE(EXCLUDED.description, truth_ledger_claude.attributes.description)
+        display_name = COALESCE(EXCLUDED.display_name, attributes.display_name),
+        description = COALESCE(EXCLUDED.description, attributes.description)
       RETURNING *
     `;
 

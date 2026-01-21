@@ -356,7 +356,7 @@ export class Deriver {
 
       // Compute claim_key_hash for the derived claim
       const hashResult = await sql<{ hash: string }[]>`
-        SELECT truth_ledger_claude.compute_claim_key_hash(
+        SELECT compute_claim_key_hash(
           ${entity.id}::uuid,
           ${attribute.id}::uuid,
           ${sql.json(domainScope as postgres.JSONValue)}::jsonb

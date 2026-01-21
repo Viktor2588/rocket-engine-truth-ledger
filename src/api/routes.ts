@@ -1763,7 +1763,7 @@ router.get('/pipeline/status', asyncHandler(async (_req, res) => {
         error_message as "errorMessage",
         metadata,
         ROW_NUMBER() OVER (PARTITION BY sync_type ORDER BY started_at DESC) as rn
-      FROM sync_status
+      FROM truth_ledger_claude.sync_status
     )
     SELECT *
     FROM ranked
@@ -1854,7 +1854,7 @@ router.get('/pipeline/status', asyncHandler(async (_req, res) => {
       sync_type as "syncType",
       started_at as "startedAt",
       records_synced as "recordsSynced"
-    FROM sync_status
+    FROM truth_ledger_claude.sync_status
     WHERE state = 'running'
     ORDER BY started_at DESC
   `;
@@ -1903,7 +1903,7 @@ router.get('/pipeline/history', asyncHandler(async (req, res) => {
         records_synced as "recordsSynced",
         error_message as "errorMessage",
         metadata
-      FROM sync_status
+      FROM truth_ledger_claude.sync_status
       WHERE sync_type = ${sync_type as string}
         AND state = ${state as string}
         ${since ? sql`AND started_at >= ${new Date(since as string)}` : sql``}
@@ -1921,7 +1921,7 @@ router.get('/pipeline/history', asyncHandler(async (req, res) => {
         records_synced as "recordsSynced",
         error_message as "errorMessage",
         metadata
-      FROM sync_status
+      FROM truth_ledger_claude.sync_status
       WHERE sync_type = ${sync_type as string}
         ${since ? sql`AND started_at >= ${new Date(since as string)}` : sql``}
       ORDER BY started_at DESC
@@ -1938,7 +1938,7 @@ router.get('/pipeline/history', asyncHandler(async (req, res) => {
         records_synced as "recordsSynced",
         error_message as "errorMessage",
         metadata
-      FROM sync_status
+      FROM truth_ledger_claude.sync_status
       WHERE state = ${state as string}
         ${since ? sql`AND started_at >= ${new Date(since as string)}` : sql``}
       ORDER BY started_at DESC
@@ -1955,7 +1955,7 @@ router.get('/pipeline/history', asyncHandler(async (req, res) => {
         records_synced as "recordsSynced",
         error_message as "errorMessage",
         metadata
-      FROM sync_status
+      FROM truth_ledger_claude.sync_status
       ${since ? sql`WHERE started_at >= ${new Date(since as string)}` : sql``}
       ORDER BY started_at DESC
       LIMIT ${parseInt(limit as string)} OFFSET ${parseInt(offset as string)}
@@ -2065,7 +2065,7 @@ async function cleanupStuckJobs(): Promise<{ cleaned: number; jobs: string[] }> 
   const sql = getConnection();
 
   const result = await sql`
-    UPDATE sync_status
+    UPDATE truth_ledger_claude.sync_status
     SET
       state = 'timeout',
       completed_at = NOW(),
@@ -2208,7 +2208,7 @@ router.get('/pipeline/jobs', asyncHandler(async (_req, res) => {
       completed_at as "completedAt",
       records_synced as "recordsSynced",
       error_message as "errorMessage"
-    FROM sync_status
+    FROM truth_ledger_claude.sync_status
     ORDER BY sync_type, started_at DESC
   `;
 
@@ -2295,7 +2295,7 @@ router.post('/pipeline/jobs/:jobId/run', asyncHandler(async (req, res) => {
 
   const dbRunning = await sql`
     SELECT id, started_at as "startedAt"
-    FROM sync_status
+    FROM truth_ledger_claude.sync_status
     WHERE sync_type = ${syncType} AND state = 'running'
     ORDER BY started_at DESC
     LIMIT 1
@@ -2326,7 +2326,7 @@ router.post('/pipeline/jobs/:jobId/run', asyncHandler(async (req, res) => {
 
   // Record in sync_status (syncType already defined above)
   await sql`
-    INSERT INTO sync_status (sync_type, state, started_at, metadata)
+    INSERT INTO truth_ledger_claude.sync_status (sync_type, state, started_at, metadata)
     VALUES (${syncType}, 'running', ${startedAt}, ${JSON.stringify({ runId, triggeredBy: 'api' })}::jsonb)
   `;
 
@@ -2381,7 +2381,7 @@ router.post('/pipeline/jobs/:jobId/cancel', asyncHandler(async (req, res) => {
                    `truth_${jobId}`;
 
   await sql`
-    UPDATE sync_status
+    UPDATE truth_ledger_claude.sync_status
     SET state = 'cancelled',
         completed_at = NOW(),
         error_message = 'Cancelled by user'
@@ -2660,10 +2660,10 @@ async function executeJob(jobId: string, runId: string, sql: ReturnType<typeof g
     }
 
     await sql`
-      UPDATE sync_status
+      UPDATE truth_ledger_claude.sync_status
       SET state = 'success', completed_at = NOW(), records_synced = ${recordsSynced}
       WHERE id = (
-        SELECT id FROM sync_status
+        SELECT id FROM truth_ledger_claude.sync_status
         WHERE sync_type = ${syncType} AND state = 'running'
         ORDER BY started_at DESC
         LIMIT 1
@@ -2686,10 +2686,10 @@ async function executeJob(jobId: string, runId: string, sql: ReturnType<typeof g
     // Only update if not already cancelled (cancel endpoint handles that)
     if (!wasCancelled) {
       await sql`
-        UPDATE sync_status
+        UPDATE truth_ledger_claude.sync_status
         SET state = 'failed', completed_at = NOW(), error_message = ${errorMessage}
         WHERE id = (
-          SELECT id FROM sync_status
+          SELECT id FROM truth_ledger_claude.sync_status
           WHERE sync_type = ${syncType} AND state = 'running'
           ORDER BY started_at DESC
           LIMIT 1

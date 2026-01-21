@@ -167,7 +167,7 @@ async function getSnippetsToProcess(config: AIExtractJobConfig): Promise<Snippet
     SELECT s.*
     FROM truth_ledger_claude.snippets s
     JOIN truth_ledger_claude.documents d ON s.document_id = d.id
-    LEFT JOIN ai_processed ap ON ap.snippet_id = s.id
+    LEFT JOIN truth_ledger_claude.ai_processed ap ON ap.snippet_id = s.id
     WHERE ap.snippet_id IS NULL
     ${config.sourceIds?.length ? sql`AND d.source_id = ANY(${config.sourceIds})` : sql``}
     ORDER BY s.created_at DESC
@@ -255,7 +255,7 @@ async function saveSingleClaim(
 
     // Compute claim_key_hash
     const hashResult = await sql<{ hash: string }[]>`
-      SELECT truth_ledger_claude.compute_claim_key_hash(
+      SELECT compute_claim_key_hash(
         ${entity.id}::uuid,
         ${attribute.id}::uuid,
         ${sql.json(scope as postgres.JSONValue)}::jsonb
